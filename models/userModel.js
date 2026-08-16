@@ -30,9 +30,12 @@ const userSchema = Schema({
   passwordResetTokenExpiresAt: Date,
   lastlogin: {
     type: Date,
-    default: Date.now
-  }
-
+    default: Date.now,
+  },
+  isActive: {
+    type: Boolean,
+    default: true,
+  },
 });
 
-export const User = model("User",userSchema);
+export const User = model("User", userSchema);

@@ -1,3 +1,7 @@
+# emial code send service
+# send reset email magic link
+# send delete email verification code
+# re-genearte verificatoin token
 # Backend Build Roadmap (Express + MongoDB)
 
 Build top to bottom. Each phase depends on the one before it.
