@@ -44,7 +44,7 @@ export const signup = async (req, res) => {
       name: name,
       email: result.data.email,
       password: hashedPassword,
-      verificationToken: verificationToken,
+      verificationToken: parseInt(verificationToken),
       verificationTokenExpiresAt: Date.now() + 3600 * 1000, // 1 hour
     });
 
@@ -281,7 +281,7 @@ export const verify = async (req, res) => {
       });
     }
 
-    if (verificationToken === isUser.verificationToken) {
+    if (parseInt(verificationToken) === isUser.verificationToken) {
       isUser.isVerified = true;
       isUser.verificationToken = undefined;
       isUser.verificationTokenExpiresAt = undefined;
