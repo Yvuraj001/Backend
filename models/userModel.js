@@ -36,6 +36,12 @@ const userSchema = Schema({
     type: Boolean,
     default: true,
   },
+  twofa:{
+    type: Boolean,
+    default: false
+  },
+  twofaToken: Number, 
+  twofaTokenExpiresAt: Date
 });
 
 export const User = model("User", userSchema);

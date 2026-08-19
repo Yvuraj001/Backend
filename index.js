@@ -12,4 +12,5 @@ app.use("/api/auth", router);
 
 app.listen(port, async () => {
   console.log("server running");
+  
 });

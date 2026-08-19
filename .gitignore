@@ -1,3 +1,5 @@
 node_modules
 .env.local
 .md
+.env
+stuff.md
