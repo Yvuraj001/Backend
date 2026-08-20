@@ -9,6 +9,10 @@ import {
   sendpasswordResetTokenEmailTemplate,
   sendtwoFactorCodeEmailTemplate,
   sendtwoFactorEnabledEmailTemplate,
+  sendaccountactivateCodeemail,
+  sendaccountdeactivateCodeemail,
+  sendaccountdeactivatenotification,
+  sendaccountactivatenotification,
 } from "../lib/email/email.js";
 
 // complete
@@ -76,7 +80,6 @@ export const signup = async (req, res) => {
       .json({ success: false, message: "Somethign went wrong!" });
   }
 };
-
 // complete
 export const signin = async (req, res) => {
   try {
@@ -123,7 +126,6 @@ export const signin = async (req, res) => {
       .json({ success: false, message: "Somethign went wrong!" });
   }
 };
-
 // complete
 export const logout = async (req, res) => {
   try {
@@ -142,7 +144,6 @@ export const logout = async (req, res) => {
       .json({ success: false, message: "Failed to logout, try again later.." });
   }
 };
-
 // complete
 export const forgotMe = async (req, res) => {
   try {
@@ -183,20 +184,19 @@ export const forgotMe = async (req, res) => {
       .json({ success: false, message: "Failed to send reset code!" });
   }
 };
-
 // complete
 export const verifyEmail = async (req, res) => {
   try {
-    const { email, verificationToken } = req.body;
+    const { verificationToken } = req.body;
 
-    if (!email || !verificationToken) {
+    if (!verificationToken) {
       return res
         .status(400)
         .json({ success: false, message: "Provide all required feild!" });
     }
 
     const isUser = await User.findOne({
-      email: email,
+      verificationToken: verificationToken,
       verificationTokenExpiresAt: { $gt: Date.now() },
     });
 
@@ -228,7 +228,6 @@ export const verifyEmail = async (req, res) => {
       .json({ success: false, message: "Failed to verify!" });
   }
 };
-
 // complete
 export const resetPassword = async (req, res) => {
   try {
@@ -265,18 +264,23 @@ export const resetPassword = async (req, res) => {
     if (parseInt(token) === parseInt(isUser.passwordResetToken)) {
       const hashedPassword = await bcrypt.hash(password, 10);
       ((isUser.password = hashedPassword),
-        (isUser.resetPassword = undefined),
-        (isUser.resetPasswordTokenExpiresAt = undefined));
+        (isUser.passwordResetToken = undefined),
+        (isUser.passwordResetTokenExpiresAt = undefined));
 
       await isUser.save();
-      res
+       await sendpasswordResetNotificationEmailTemplate(isUser.email).catch(
+         (err) => console.log("Failed to send reset token email:", err.message),
+       );
+    return   res
         .status(200)
         .json({ success: true, message: "Password reset sucessfull!" });
 
-      await sendpasswordResetNotificationEmailTemplate(isUser.email).catch(
-        (err) => console.log("Failed to send reset token email:", err.message),
-      );
+     
     }
+    return res.status(400).json({
+      success: false,
+      message: "Failed to reset password, provide valid token!",
+    });
   } catch (error) {
     console.log("Error while changin password!", error.message);
     return res
@@ -284,7 +288,7 @@ export const resetPassword = async (req, res) => {
       .json({ success: false, message: "Failed to change password!" });
   }
 };
-
+// complete
 export const deactivateMe = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -313,25 +317,24 @@ export const deactivateMe = async (req, res) => {
         success: false,
         message: "Provide the valid email or password!",
       });
+    const verificationToken = crypto.randomInt(100000, 1000000);
+    isUser.deactivationCode = verificationToken;
+    isUser.deactivationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
 
-    // send activation code email here
-    // verfication logic
-    // send Account deactivating sucessfull email
-    // after that:
-    await User.findOneAndUpdate(
-      { email: email },
-      { $set: { isActive: false } },
+    await isUser.save();
+    await sendaccountdeactivateCodeemail(isUser.email, verificationToken).catch(
+      (err) =>
+        console.log("error sending deactivation code email", err.message),
     );
-
     return res
       .status(200)
-      .json({ success: true, message: "Account deactivated!" });
+      .json({ success: true, message: "Deactivation Code sent!" });
   } catch (error) {
-    console.log("Error while deleting user", error.message);
-    return res.json({ success: false, message: "Failed to delete user!" });
+    console.log("Error while deactivating user", error.message);
+    return res.json({ success: false, message: "Failed to deactivate user!" });
   }
 };
-
+// complete
 export const activateMe = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -343,34 +346,132 @@ export const activateMe = async (req, res) => {
     }
     const isUser = await User.findOne({ email: email });
     if (!isUser)
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found!" });
-    if (isUser.isActive)
-      return res
-        .status(400)
-        .json({ success: false, message: "Account is already active!" });
+      return res.status(500).json({
+        success: false,
+        message: "Provide the valid email or password!",
+      });
 
+    if (isUser.isActive === true) {
+      return res.status(500).json({
+        success: false,
+        message: "Account is already activated!",
+      });
+    }
     const matchPass = await bcrypt.compare(password, isUser.password);
-
     if (!matchPass)
       return res.status(500).json({
         success: false,
-        message: "Email or Password is incorrect!",
+        message: "Provide the valid email or password!",
       });
+    const verificationToken = crypto.randomInt(100000, 1000000);
+    isUser.activationCode = verificationToken;
+    isUser.activationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
 
-    // send activation code here
-    // verfication logic
-    // send Account activated sucessfull
-    // after that:
-    await User.findOneAndUpdate({ email: email }, { $set: { isActive: true } });
-
+    await isUser.save();
+  await  sendaccountactivateCodeemail(isUser.email, verificationToken).catch(
+      (err) =>
+        console.log("error sending activation code email", err.message),
+    );
     return res
       .status(200)
-      .json({ success: true, message: "Account Activated successfully !" });
+      .json({ success: true, message: "Activation Code sent!" });
   } catch (error) {
-    console.log("Error while Activating user", error.message);
-    return res.json({ success: false, message: "Failed to Activate user!" });
+    console.log("Error while activating user", error.message);
+    return res.json({ success: false, message: "Failed to activate user!" });
+  }
+};
+// complete
+export const verifyDeactivation = async (req, res) => {
+  try {
+    const { verificationToken } = req.body;
+
+    if (!verificationToken) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Provide all required feild!" });
+    }
+
+    const isUser = await User.findOne({
+      deactivationCode: verificationToken,
+      deactivationCodeExpiresAt: { $gt: Date.now() },
+    });
+
+    if (!isUser) {
+      return res.status(500).json({
+        success: false,
+        message: "Verification code is invalid or expired!",
+      });
+    }
+
+    if (parseInt(verificationToken) === isUser.deactivationCode) {
+      isUser.isActive = false;
+      isUser.deactivationCode = undefined;
+      isUser.deactivationCodeExpiresAt = undefined;
+
+      await isUser.save();
+      await sendaccountdeactivatenotification(isUser.email).catch((err)=>{
+        console.log("error while sending deactivatoin notificatoin", err.message)
+      }) 
+      return res
+        .status(200)
+        .json({ success: true, message: "Accout deactivatation sucessfull!" });
+    }
+
+    return res
+      .status(400)
+      .json({ success: false, message: "Failed to deactivate your account!" });
+  } catch (error) {
+    console.log("Error while deactivating user", error.message);
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to Deactivate!" });
+  }
+};
+// complete
+export const verifyActivation = async (req, res) => {
+  try {
+    const { verificationToken } = req.body;
+
+    if (!verificationToken) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Provide required feild!" });
+    }
+
+    const isUser = await User.findOne({
+      activationCode: verificationToken,
+      activationCodeExpiresAt: { $gt: Date.now() },
+    });
+
+    if (!isUser) {
+      return res.status(500).json({
+        success: false,
+        message: "Verification code is invalid or expired!",
+      });
+    }
+
+    if (parseInt(verificationToken) === isUser.activationCode) {
+      isUser.isActive = true;
+      isUser.activationCode = undefined;
+      isUser.activationCodeExpiresAt = undefined;
+
+      await isUser.save();
+      await sendaccountactivatenotification(isUser.email).catch((err)=>{
+        console.log("error while sending activation email", err.message)
+      })
+     return res
+        .status(200)
+        .json({ success: true, message: "Accout activation sucessfull!" });
+    }
+
+    return res
+      .status(400)
+      .json({ success: false, message: "Failed to activate your account!" });
+  } catch (error) {
+    console.log("Error while activation of user", error.message);
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to Activate!" });
   }
 };
 

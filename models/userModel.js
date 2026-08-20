@@ -15,7 +15,7 @@ const userSchema = Schema({
     type: String,
     required: true,
   },
-  createAt: {
+  createdAt: {
     type: Date,
     default: Date.now,
   },
@@ -36,12 +36,16 @@ const userSchema = Schema({
     type: Boolean,
     default: true,
   },
-  twofa:{
+  twofa: {
     type: Boolean,
-    default: false
+    default: false,
   },
-  twofaToken: Number, 
-  twofaTokenExpiresAt: Date
+  twofaToken: Number,
+  twofaTokenExpiresAt: Date,
+  deactivationCode: Number,
+  deactivationCodeExpiresAt: Date,
+  activationCode: Number,
+  activationCodeExpiresAt: Date,
 });
 
 export const User = model("User", userSchema);
