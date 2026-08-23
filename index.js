@@ -5,19 +5,33 @@ import "dotenv/config";
 import { authRouter } from "./routes/auth.routes.js";
 import { securityRoutes } from "./routes/security.routes.js";
 import { VerificationRouter } from "./routes/verification.routes.js";
+import cors from "cors";
 
 const app = express();
-const port = process.env.PORT
+const port = process.env.PORT;
 await connectDB();
 
 app.use(cookieParser());
 app.use(express.json());
+// app.use(
+//   cors({
+//     cors: {
+//       origin: "http://localhost:5173",
+
+//       credentials: true,
+
+//       methods: ["GET", "POST"],
+//     },
+//   }),
+// );
 
 app.use("/api/auth", authRouter);
-app.use("/api/auth/security", securityRoutes)
-app.use("/api/auth/verification", VerificationRouter)
+app.use("/api/auth/security", securityRoutes);
+app.use("/api/auth/verification", VerificationRouter);
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ health: "OK", message: "Everything running beautifully!!" });
+});
 app.listen(port, async () => {
   console.log("server running");
-  
 });
