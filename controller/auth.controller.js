@@ -14,13 +14,13 @@ import {
   sendaccountdeactivatenotification,
   sendaccountactivatenotification,
 } from "../lib/email/email.js";
-
+import { verifyAuth } from "../lib/verifyAuthentication/verifyAuth.js";
 // signup function
 export const signup = async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
-      return res.json({
+      return res.status(400).json({
         success: false,
         message: "Please provide required feilds",
       });
@@ -34,7 +34,7 @@ export const signup = async (req, res) => {
     const result = userData.safeParse({ email: email, password: password });
 
     if (!result.success) {
-      return res.json({
+      return res.status(400).json({
         success: false,
         message: result.error.issues.map((i) => i.message).join(", "),
       });
@@ -44,7 +44,9 @@ export const signup = async (req, res) => {
     });
 
     if (isUser) {
-      return res.json({ success: false, message: "User already exists!" });
+      return res
+        .status(409)
+        .json({ success: false, message: "User already exists!" });
     }
     // pass and verfication tokens
     const hashedPassword = await bcrypt.hash(result.data.password, 10);
@@ -65,27 +67,35 @@ export const signup = async (req, res) => {
     // setting cookies
 
     await generateCookies(res, newUser._id);
-
-    res.json({
+    await sendsignupEmailTemplate(result.data.email, verificationToken).catch(
+      (err) => console.log("Failed to send signup email:", err.message),
+    );
+    return res.status(201).json({
       success: true,
       message: "User created successfully!",
     });
-    sendsignupEmailTemplate(result.data.email, verificationToken).catch((err) =>
-      console.log("Failed to send signup email:", err.message),
-    );
   } catch (error) {
     console.log("Error while creating user!", error.message);
     return res
-      .status(400)
+      .status(500)
       .json({ success: false, message: "Somethign went wrong!" });
   }
 };
 // login function
 export const signin = async (req, res) => {
   try {
+    const token = await verifyAuth(req, res, { type: "middleware" });
+    if (token) {
+      return res.json({
+        success: true,
+        userId: token.userId,
+        message: "Logged in",
+      });
+    }
+
     const { email, password } = req.body;
     if (!email || !password) {
-      return res.json({
+      return res.status(400).json({
         success: false,
         message: "Email or password not provided!",
       });
@@ -99,7 +109,7 @@ export const signin = async (req, res) => {
       });
     }
     if (isUser.isActive === false) {
-      return res.status(401).json({
+      return res.status(403).json({
         success: false,
         message: "Your account is deactivated!!",
       });
@@ -118,11 +128,13 @@ export const signin = async (req, res) => {
       { email: email },
       { $set: { lastlogin: Date.now() } },
     );
-    res.status(200).json({ success: true, message: "login sucessfull!" });
+    return res
+      .status(200)
+      .json({ success: true, message: "login sucessfull!" });
   } catch (error) {
     console.log("Error while logining user: ", error.message);
     return res
-      .status(400)
+      .status(500)
       .json({ success: false, message: "Somethign went wrong!" });
   }
 };
@@ -140,7 +152,7 @@ export const logout = async (req, res) => {
   } catch (error) {
     console.log("Error while logout user", error.message);
     res
-      .status(400)
+      .status(500)
       .json({ success: false, message: "Failed to logout, try again later.." });
   }
 };
@@ -156,7 +168,7 @@ export const forgotMe = async (req, res) => {
         .status(400)
         .json({ success: false, message: "Provide email!" });
     }
-    const isUser = await User.findOne({ email });
+    const isUser = await User.findOne({ email: email });
     if (!isUser) {
       return res
         .status(404)
@@ -190,9 +202,9 @@ export const forgotMe = async (req, res) => {
 // resets the password
 export const resetPassword = async (req, res) => {
   try {
-    const { email, password, token } = req.body;
-    if (!email || !password || !token) {
-      return res.json({
+    const { password, token } = req.body;
+    if (!password || !token) {
+      return res.status(400).json({
         success: false,
         message: "Provide all the require feild!",
       });
@@ -204,7 +216,7 @@ export const resetPassword = async (req, res) => {
     const result = userData.safeParse({ password: password });
 
     if (!result.success) {
-      return res.json({
+      return res.status(400).json({
         success: false,
         message: result.error.issues.map((i) => i.message).join(", "),
       });
@@ -214,7 +226,7 @@ export const resetPassword = async (req, res) => {
       passwordResetTokenExpiresAt: { $gt: Date.now() },
     });
     if (!isUser) {
-      return res.json({
+      return res.status(400).json({
         success: false,
         message: "Invalid  or expired token!",
       });
@@ -241,7 +253,7 @@ export const resetPassword = async (req, res) => {
   } catch (error) {
     console.log("Error while changin password!", error.message);
     return res
-      .status(400)
+      .status(500)
       .json({ success: false, message: "Failed to change password!" });
   }
 };
@@ -255,25 +267,25 @@ export const activateMe = async (req, res) => {
 
     if (!email || !password) {
       return res
-        .status(500)
+        .status(400)
         .json({ success: false, message: "Provide all the required feild!" });
     }
     const isUser = await User.findOne({ email: email });
     if (!isUser)
-      return res.status(500).json({
+      return res.status(401).json({
         success: false,
         message: "Provide the valid email or password!",
       });
 
     if (isUser.isActive === true) {
-      return res.status(500).json({
+      return res.status(409).json({
         success: false,
         message: "Account is already activated!",
       });
     }
     const matchPass = await bcrypt.compare(password, isUser.password);
     if (!matchPass)
-      return res.status(500).json({
+      return res.status(401).json({
         success: false,
         message: "Provide the valid email or password!",
       });
@@ -290,7 +302,9 @@ export const activateMe = async (req, res) => {
       .json({ success: true, message: "Activation Code sent!" });
   } catch (error) {
     console.log("Error while activating user", error.message);
-    return res.json({ success: false, message: "Failed to activate user!" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to activate user!" });
   }
 };
 // initialize de-activation of user
@@ -300,25 +314,25 @@ export const deactivateMe = async (req, res) => {
 
     if (!email || !password) {
       return res
-        .status(500)
+        .status(400)
         .json({ success: false, message: "Provide all the required feild!" });
     }
     const isUser = await User.findOne({ email: email });
     if (!isUser)
-      return res.status(500).json({
+      return res.status(401).json({
         success: false,
         message: "Provide the valid email or password!",
       });
 
     if (isUser.isActive === false) {
-      return res.status(500).json({
+      return res.status(409).json({
         success: false,
         message: "Account is already de-activated!",
       });
     }
     const matchPass = await bcrypt.compare(password, isUser.password);
     if (!matchPass)
-      return res.status(500).json({
+      return res.status(401).json({
         success: false,
         message: "Provide the valid email or password!",
       });
@@ -336,56 +350,54 @@ export const deactivateMe = async (req, res) => {
       .json({ success: true, message: "Deactivation Code sent!" });
   } catch (error) {
     console.log("Error while deactivating user", error.message);
-    return res.json({ success: false, message: "Failed to deactivate user!" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to deactivate user!" });
   }
 };
 
 // ************************************************************************************
 
-//  2FA initilazation 
+//  2FA initilazation
 export const initilaze2FA = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Provide all required feilds!" });
+    const userId = await verifyAuth(req, res);
+
+    if (!userId.success) {
+      return res.json({
+        success: false,
+        message: "Please signin to enable 2FA!",
+      });
     }
-    const isUser = await User.findOne({ email: email });
+
+    const isUser = await User.findOne({ _id: userId.userId });
     if (!isUser) {
       return res
         .status(404)
         .json({ success: false, message: "Invalid email!" });
     }
-    if (!isUser.isVerified){
-      return res
-          .status(403)
-          .json({ success: false, message: "First verify your account to enable 2FA!" });
-
+    if (!isUser.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: "First verify your account to enable 2FA!",
+      });
     }
-      if (!isUser.isActive) {
-        return res
-          .status(403)
-          .json({ success: false, message: "Your Account is de-activated!" });
-      }
-
-      if(isUser.twofa){
-         return res
-          .status(403)
-          .json({ success: false, message: "Your Account has already enabled 2FA!" });
-
-      }
-    const matchPass = await bcrypt.compare(password, isUser.password);
-
-    if (!matchPass) {
+    if (!isUser.isActive) {
       return res
-        .status(401)
-        .json({ success: false, message: "Invalid credentials!" });
+        .status(403)
+        .json({ success: false, message: "Your Account is de-activated!" });
+    }
+
+    if (isUser.twofa) {
+      return res.status(409).json({
+        success: false,
+        message: "Your Account has already enabled 2FA!",
+      });
     }
 
     if (isUser.twofa) {
       return res
-        .status(403)
+        .status(409)
         .json({ success: false, message: "2FA already enbaled!" });
     }
 
@@ -404,9 +416,10 @@ export const initilaze2FA = async (req, res) => {
     });
   } catch (error) {
     console.log("Error while sending 2FA code", error.message);
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to send 2FA code!" });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to send 2FA code. Signin to use this feature!",
+    });
   }
 };
 
@@ -429,7 +442,7 @@ export const verifyEmail = async (req, res) => {
     });
 
     if (!isUser) {
-      return res.status(500).json({
+      return res.status(400).json({
         success: false,
         message: "Verification code is invalid or expired!",
       });
@@ -473,7 +486,7 @@ export const verifyDeactivation = async (req, res) => {
     });
 
     if (!isUser) {
-      return res.status(500).json({
+      return res.status(400).json({
         success: false,
         message: "Verification code is invalid or expired!",
       });
@@ -523,7 +536,7 @@ export const verifyActivation = async (req, res) => {
     });
 
     if (!isUser) {
-      return res.status(500).json({
+      return res.status(400).json({
         success: false,
         message: "Verification code is invalid or expired!",
       });
@@ -553,16 +566,23 @@ export const verifyActivation = async (req, res) => {
       .json({ success: false, message: "Failed to Activate!" });
   }
 };
-// verifies 2FA and Enables/Disables 
+// verifies 2FA and Enables/Disables
 export const verify2FA = async (req, res) => {
   try {
     // type: enable or disable
-    const { verificationToken , type} = req.body;
+    const { verificationToken, type } = req.body;
 
     if (!verificationToken || !type) {
+      return res.status(400).json({
+        success: false,
+        message: "Provide verification token and type!",
+      });
+    }
+
+    if (type !== "enable" && type !== "disable") {
       return res
         .status(400)
-        .json({ success: false, message: "Provide verification token and type!" });
+        .json({ success: false, message: "Type must be enable or disable!" });
     }
 
     const isUser = await User.findOne({
@@ -571,30 +591,32 @@ export const verify2FA = async (req, res) => {
     });
 
     if (!isUser) {
-      return res.status(500).json({
+      return res.status(400).json({
         success: false,
         message: "Invalid or expired code!",
       });
     }
 
     if (parseInt(verificationToken) === isUser.twofaToken) {
-      isUser.twofa=type === 'enable'?true: false;
+      isUser.twofa = type === "enable" ? true : false;
       isUser.twofaToken = undefined;
       isUser.twofaTokenExpiresAt = undefined;
 
       await isUser.save();
-      return res
-        .status(200)
-        .json({ success: true, message: type === "enable"?"2FA enabled sucessfully!":"2FA disabled sucessfully" });
+      return res.status(200).json({
+        success: true,
+        message:
+          type === "enable"
+            ? "2FA enabled sucessfully!"
+            : "2FA disabled sucessfully",
+      });
     }
 
-    return res
-      .status(400)
-      .json({
-        success: false,
-        message:
-          type === "enable" ? "Failed to enable 2FA" : "Failed to disable 2FA",
-      });
+    return res.status(400).json({
+      success: false,
+      message:
+        type === "enable" ? "Failed to enable 2FA" : "Failed to disable 2FA",
+    });
   } catch (error) {
     console.log("Error while enabling/disablign 2FA", error.message);
     return res
@@ -603,4 +625,15 @@ export const verify2FA = async (req, res) => {
   }
 };
 
+export const verifySession = async (req, res) => {
+  const token = await verifyAuth(req, res, { type: "middleware" });
+  if (!token.userId) {
+    return res.json({ success: false, message: "Not logged in!" });
+  }
 
+  return res.json({
+    success: true,
+    userId: token.userId,
+    message: "Logged in",
+  });
+};

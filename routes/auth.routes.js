@@ -1,5 +1,6 @@
 import express from "express";
 import { signup, signin, logout } from "../controller/auth.controller.js";
+import { verifyAuth } from "../lib/verifyAuthentication/verifyAuth.js";
 
 export const authRouter = express.Router();
 
