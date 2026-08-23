@@ -3,6 +3,7 @@ import { User } from "../models/userModel.js";
 import bcrypt from "bcrypt";
 import { generateCookies } from "../lib/generateCookies/index.js";
 import crypto from "crypto";
+import jwt from 'jsonwebtoken'
 import {
   sendsignupEmailTemplate,
   sendpasswordResetNotificationEmailTemplate,
@@ -15,6 +16,8 @@ import {
   sendaccountactivatenotification,
 } from "../lib/email/email.js";
 import { verifyAuth } from "../lib/verifyAuthentication/verifyAuth.js";
+
+
 // signup function
 export const signup = async (req, res) => {
   try {
@@ -84,15 +87,6 @@ export const signup = async (req, res) => {
 // login function
 export const signin = async (req, res) => {
   try {
-    const token = await verifyAuth(req, res, { type: "middleware" });
-    if (token) {
-      return res.json({
-        success: true,
-        userId: token.userId,
-        message: "Logged in",
-      });
-    }
-
     const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({
@@ -361,16 +355,16 @@ export const deactivateMe = async (req, res) => {
 //  2FA initilazation
 export const initilaze2FA = async (req, res) => {
   try {
-    const userId = await verifyAuth(req, res);
-
-    if (!userId.success) {
+     const cookie = await req.cookies.pass;
+     const tokenMatched = await jwt.verify(cookie, process.env.JWT_SECRET);
+    if (!tokenMatched) {
       return res.json({
         success: false,
         message: "Please signin to enable 2FA!",
       });
     }
 
-    const isUser = await User.findOne({ _id: userId.userId });
+    const isUser = await User.findOne({ _id: tokenMatched.userId });
     if (!isUser) {
       return res
         .status(404)
@@ -625,15 +619,3 @@ export const verify2FA = async (req, res) => {
   }
 };
 
-export const verifySession = async (req, res) => {
-  const token = await verifyAuth(req, res, { type: "middleware" });
-  if (!token.userId) {
-    return res.json({ success: false, message: "Not logged in!" });
-  }
-
-  return res.json({
-    success: true,
-    userId: token.userId,
-    message: "Logged in",
-  });
-};

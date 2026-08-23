@@ -5,5 +5,5 @@ import { verifyAuth } from "../lib/verifyAuthentication/verifyAuth.js";
 export const authRouter = express.Router();
 
 authRouter.post("/signup", signup);
-authRouter.post("/signin", signin);
+authRouter.post("/signin", verifyAuth, signin);
 authRouter.post("/logout", logout);
