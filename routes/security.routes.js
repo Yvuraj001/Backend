@@ -5,13 +5,21 @@ import {
   forgotMe,
   initilaze2FA,
 } from "../controller/auth.controller.js";
+import rateLimit from "express-rate-limit";
+
+const limiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 export const securityRoutes = express.Router();
 // initalize forget password of user
-securityRoutes.post("/forgot-user", forgotMe);
+securityRoutes.post("/forgot-user", limiter, forgotMe);
 // initalize re-activation of user
-securityRoutes.post("/activate-user", activateMe);
+securityRoutes.post("/activate-user", limiter, activateMe);
 // initialize de-activation of user
-securityRoutes.post("/deactivate-user", deactivateMe);
+securityRoutes.post("/deactivate-user", limiter, deactivateMe);
 // initalize enable/disable of 2FA
-securityRoutes.post("/mutate-2fa", initilaze2FA);
+securityRoutes.post("/mutate-2fa", limiter, initilaze2FA);
