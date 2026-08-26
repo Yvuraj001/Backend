@@ -3,7 +3,7 @@ import { User } from "../models/userModel.js";
 import bcrypt from "bcrypt";
 import { generateCookies } from "../lib/generateCookies/index.js";
 import crypto from "crypto";
-import jwt from 'jsonwebtoken'
+import jwt from "jsonwebtoken";
 import {
   sendsignupEmailTemplate,
   sendpasswordResetNotificationEmailTemplate,
@@ -16,7 +16,6 @@ import {
   sendaccountactivatenotification,
 } from "../lib/email/email.js";
 import { verifyAuth } from "../lib/verifyAuthentication/verifyAuth.js";
-
 
 // signup function
 export const signup = async (req, res) => {
@@ -62,7 +61,7 @@ export const signup = async (req, res) => {
       email: result.data.email,
       password: hashedPassword,
       verificationToken: parseInt(verificationToken),
-      verificationTokenExpiresAt: Date.now() + 3600 * 1000, // 1 hour
+      verificationTokenExpiresAt: Date.now() + 600 * 1000, // 10 minutes
     });
 
     await newUser.save();
@@ -355,8 +354,8 @@ export const deactivateMe = async (req, res) => {
 //  2FA initilazation
 export const initilaze2FA = async (req, res) => {
   try {
-     const cookie = await req.cookies.pass;
-     const tokenMatched = await jwt.verify(cookie, process.env.JWT_SECRET);
+    const cookie = await req.cookies.pass;
+    const tokenMatched = await jwt.verify(cookie, process.env.JWT_SECRET);
     if (!tokenMatched) {
       return res.json({
         success: false,
@@ -619,3 +618,96 @@ export const verify2FA = async (req, res) => {
   }
 };
 
+export const generateAgain = async (req, res) => {
+  const { email, type } = req.body;
+
+  const cookie = await req.cookies.pass;
+  if (!cookie) {
+    return res.json({
+      success: false,
+      messagae: "Please sign-in to use this feature!",
+    });
+  }
+  try {
+    const token = await jwt.verify(cookie, process.env.JWT_SECRET);
+  } catch (error) {
+    console.log("error in jwt verification in generateAgain", error.messagae);
+    res.clearCookie("pass");
+    return res.json({
+      fatal: true,
+      messagae: "UnAuthorised Access. Sign-in again!",
+    });
+  }
+
+  if (!email || !type) {
+    return res.json({
+      success: false,
+      messagae: "Provide email and type of request!",
+    });
+  }
+
+  const isUser = await User.findOne({ email: email });
+
+  if (!isUser) {
+    return res.json({ success: false, message: "Provide a valid email!" });
+  }
+
+  const newToken = crypto.randomInt(100000, 1000000);
+
+  if (type === "email") {
+    isUser.verificationToken = newToken;
+    isUser.verificationTokenExpiresAt = Date.now() + 600 * 1000; // 10 minutes
+    await isUser.save();
+    sendsignupEmailTemplate(isUser.email, newToken).catch((err) =>
+      console.log("Failed to send email verfication:", err.message),
+    );
+    return res
+      .status(200)
+      .json({ success: true, message: "Resent successfull!" });
+  }
+  if (type === "reset") {
+    isUser.passwordResetToken = newToken;
+    isUser.passwordResetTokenExpiresAt = Date.now() + 600 * 1000; // 10 minutes;
+    await isUser.save();
+    await sendpasswordResetTokenEmailTemplate(isUser.email, newToken).catch(
+      (err) => console.log("Failed to send reset token email:", err.message),
+    );
+    return res
+      .status(200)
+      .json({ success: true, message: "Resent successfull!" });
+  }
+  if (type === "2fa") {
+    isUser.twofaToken = newToken;
+    isUser.twofaTokenExpiresAt = Date.now() + 600 * 1000; // 10 minutes
+    await isUser.save();
+    await sendtwoFactorCodeEmailTemplate(isUser.email, newToken).catch((err) =>
+      console.log("Failed to send 2fa token email:", err.message),
+    );
+    return res
+      .status(200)
+      .json({ success: true, message: "Resent successfull!" });
+  }
+  if (type === "activation") {
+    isUser.activationCode = newToken;
+    isUser.activationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
+    await isUser.save();
+    await sendaccountactivateCodeemail(isUser.email, newToken).catch((err) =>
+      console.log("Failed to send activation token email:", err.message),
+    );
+    return res
+      .status(200)
+      .json({ success: true, message: "Resent successfull!" });
+  }
+
+  if (type === "deactivation") {
+    isUser.deactivationCode = newToken;
+    isUser.deactivationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
+    await isUser.save();
+    await sendaccountdeactivateCodeemail(isUser.email, newToken).catch((err) =>
+      console.log("Failed to send deactivation token email:", err.message),
+    );
+    return res
+      .status(200)
+      .json({ success: true, message: "Resent successfull!" });
+  }
+};

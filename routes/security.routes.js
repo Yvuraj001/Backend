@@ -4,7 +4,8 @@ import {
   activateMe,
   forgotMe,
   initilaze2FA,
-} from "../controller/auth.controller.js";
+  generateAgain,
+} from "../controller/controller.js";
 import rateLimit from "express-rate-limit";
 
 const limiter = rateLimit({
@@ -23,3 +24,7 @@ securityRoutes.post("/activate-user", limiter, activateMe);
 securityRoutes.post("/deactivate-user", limiter, deactivateMe);
 // initalize enable/disable of 2FA
 securityRoutes.post("/mutate-2fa", limiter, initilaze2FA);
+
+// resend codes
+
+securityRoutes.post("/resend-code", generateAgain);

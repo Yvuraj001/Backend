@@ -25,7 +25,7 @@ app.use(express.json());
 //   }),
 // );
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 5 * 60 * 1000,
   max: 25,
   standardHeaders: true,
   legacyHeaders: false,
