@@ -9,7 +9,7 @@ import {
 import rateLimit from "express-rate-limit";
 
 const limiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
+  windowMs: 16 * 60 * 1000,
   max: 15,
   standardHeaders: true,
   legacyHeaders: false,
@@ -27,4 +27,4 @@ securityRoutes.post("/mutate-2fa", limiter, initilaze2FA);
 
 // resend codes
 
-securityRoutes.post("/resend-code", generateAgain);
+securityRoutes.post("/resend-code", limiter,  generateAgain);

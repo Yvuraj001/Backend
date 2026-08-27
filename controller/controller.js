@@ -52,7 +52,7 @@ export const signup = async (req, res) => {
     }
     // pass and verfication tokens
     const hashedPassword = await bcrypt.hash(result.data.password, 10);
-    const verificationToken = crypto.randomInt(100000, 1000000);
+    const verificationToken = crypto.randomInt(100000, 10000000);
 
     // saving user
     const name = result.data.email.split("@")[0];
@@ -173,7 +173,7 @@ export const forgotMe = async (req, res) => {
         .json({ success: false, message: "Account is de-activated!" });
     }
 
-    const resetToken = crypto.randomInt(100000, 1000000);
+    const resetToken = crypto.randomInt(100000, 10000000);
     isUser.passwordResetToken = resetToken;
     isUser.passwordResetTokenExpiresAt = Date.now() + 15 * 60 * 1000; // 15 min
     await isUser.save();
@@ -282,7 +282,7 @@ export const activateMe = async (req, res) => {
         success: false,
         message: "Provide the valid email or password!",
       });
-    const verificationToken = crypto.randomInt(100000, 1000000);
+    const verificationToken = crypto.randomInt(100000, 10000000);
     isUser.activationCode = verificationToken;
     isUser.activationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
 
@@ -329,7 +329,7 @@ export const deactivateMe = async (req, res) => {
         success: false,
         message: "Provide the valid email or password!",
       });
-    const verificationToken = crypto.randomInt(100000, 1000000);
+    const verificationToken = crypto.randomInt(100000, 10000000);
     isUser.deactivationCode = verificationToken;
     isUser.deactivationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
 
@@ -394,7 +394,7 @@ export const initilaze2FA = async (req, res) => {
         .json({ success: false, message: "2FA already enbaled!" });
     }
 
-    const twofaToken = crypto.randomInt(100000, 1000000);
+    const twofaToken = crypto.randomInt(100000, 10000000);
     isUser.twofaToken = twofaToken;
     isUser.twofaTokenExpiresAt = Date.now() + 15 * 60 * 1000; // 15 min
 
@@ -652,7 +652,7 @@ export const generateAgain = async (req, res) => {
     return res.json({ success: false, message: "Provide a valid email!" });
   }
 
-  const newToken = crypto.randomInt(100000, 1000000);
+  const newToken = crypto.randomInt(100000, 10000000);
 
   if (type === "email") {
     isUser.verificationToken = newToken;
