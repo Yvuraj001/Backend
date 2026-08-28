@@ -7,23 +7,34 @@ import { securityRoutes } from "./routes/security.routes.js";
 import { VerificationRouter } from "./routes/verification.routes.js";
 import rateLimit from "express-rate-limit";
 import cors from "cors";
+
+
 const app = express();
 const port = process.env.PORT;
+
+
+const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:5173")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 await connectDB();
 
 app.use(cookieParser());
 app.use(express.json());
-// app.use(
-//   cors({
-//     cors: {
-//       origin: "http://localhost:5173",
+app.use(
+  cors({
+    origin(origin, callback) {
+     
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
 
-//       credentials: true,
-
-//       methods: ["GET", "POST"],
-//     },
-//   }),
-// );
+      return callback(new Error("Origin is not allowed by CORS"));
+    },
+    credentials: true,
+    methods: ["GET", "POST"],
+  }),
+);
 const limiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 25,

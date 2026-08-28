@@ -30,7 +30,7 @@ VerificationRouter.get("/verify",limiter,  async (req, res) => {
       });
     }
   } catch (error) {
-    console.log("the error in verifyAuth or not logged in", error.message);
+    console.log("You arn't not logged in", error.message);
 
     return res.json({
       success: false,

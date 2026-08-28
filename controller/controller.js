@@ -17,6 +17,23 @@ import {
 } from "../lib/email/email.js";
 import { verifyAuth } from "../lib/verifyAuthentication/verifyAuth.js";
 
+const zodEmail = z.object({
+  email: z.email("Please provide a valid email!"),
+});
+
+const zodVerification = z.object({
+  verificationToken: z.number("Provide a valid number!"),
+});
+
+const zodPassword = z.object({
+  password: z.string().min(6, "Password must me atleast 6 digit long!"),
+});
+
+const zodResetPass = z.object({
+  password: z.string().min(6, "Password must me atleast 6 digit long!"),
+  verificationToken: z.number("Provide a valid number!"),
+});
+
 // signup function
 export const signup = async (req, res) => {
   try {
@@ -52,7 +69,7 @@ export const signup = async (req, res) => {
     }
     // pass and verfication tokens
     const hashedPassword = await bcrypt.hash(result.data.password, 10);
-    const verificationToken = crypto.randomInt(100000, 10000000);
+    const verificationToken = crypto.randomInt(1000000, 10000000);
 
     // saving user
     const name = result.data.email.split("@")[0];
@@ -66,15 +83,19 @@ export const signup = async (req, res) => {
 
     await newUser.save();
 
-    // setting cookies
-
-    await generateCookies(res, newUser._id);
     await sendsignupEmailTemplate(result.data.email, verificationToken).catch(
-      (err) => console.log("Failed to send signup email:", err.message),
+      (err) => {
+        res.status(500).json({
+          success: false,
+          message: "Failed to send verification Token email",
+        });
+
+        console.log("Failed to send verification Token email:", err.message);
+      },
     );
     return res.status(201).json({
       success: true,
-      message: "User created successfully!",
+      message: "Verify your account to to complete signup!",
     });
   } catch (error) {
     console.log("Error while creating user!", error.message);
@@ -93,7 +114,15 @@ export const signin = async (req, res) => {
         message: "Email or password not provided!",
       });
     }
-    const isUser = await User.findOne({ email: email });
+
+    const result = zodEmail.safeParse({ email: email });
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error.issues.map((i) => i.message).join(", "),
+      });
+    }
+    const isUser = await User.findOne({ email: result.data.email });
 
     if (!isUser) {
       return res.status(401).json({
@@ -107,6 +136,12 @@ export const signin = async (req, res) => {
         message: "Your account is deactivated!!",
       });
     }
+    if (isUser.isVerified === false) {
+      return res.status(403).json({
+        success: false,
+        message: "Verify your account to login!",
+      });
+    }
 
     const matchPass = await bcrypt.compare(password, isUser.password);
     if (!matchPass) {
@@ -115,15 +150,22 @@ export const signin = async (req, res) => {
         message: "Invalid email or password",
       });
     }
-
-    await generateCookies(res, isUser._id);
-    const updateEntry = await User.findOneAndUpdate(
-      { email: email },
-      { $set: { lastlogin: Date.now() } },
-    );
-    return res
-      .status(200)
-      .json({ success: true, message: "login sucessfull!" });
+    if (!isUser.twofa) {
+      await generateCookies(res, isUser._id);
+      const updateEntry = await User.findOneAndUpdate(
+        { email: result.data.email },
+        { $set: { lastlogin: Date.now() } },
+      );
+      return res
+        .status(200)
+        .json({ success: true, message: "login sucessfull!" });
+    }
+    const signInToken = crypto.randomInt(1000000, 10000000);
+    isUser.twofaToken = signInToken;
+    isUser.twofaTokenExpiresAt = Date.now() + 600 * 1000; // 10 min
+    // await send2fasignincode(isUser.email, signInToken) create this email template
+    await isUser.save();
+    return res.status(200).json({ success: true, message: "Verify yourself!" });
   } catch (error) {
     console.log("Error while logining user: ", error.message);
     return res
@@ -161,7 +203,14 @@ export const forgotMe = async (req, res) => {
         .status(400)
         .json({ success: false, message: "Provide email!" });
     }
-    const isUser = await User.findOne({ email: email });
+    const result = zodEmail.safeParse({ email: email });
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error.issues.map((i) => i.message).join(", "),
+      });
+    }
+    const isUser = await User.findOne({ email: result.data.email });
     if (!isUser) {
       return res
         .status(404)
@@ -173,18 +222,24 @@ export const forgotMe = async (req, res) => {
         .json({ success: false, message: "Account is de-activated!" });
     }
 
-    const resetToken = crypto.randomInt(100000, 10000000);
+    const resetToken = crypto.randomInt(1000000, 10000000);
     isUser.passwordResetToken = resetToken;
-    isUser.passwordResetTokenExpiresAt = Date.now() + 15 * 60 * 1000; // 15 min
+    isUser.passwordResetTokenExpiresAt = Date.now() + 600 * 1000; // 10 min
     await isUser.save();
 
-    res
+    await sendpasswordResetTokenEmailTemplate(isUser.email, resetToken).catch(
+      (err) => {
+        res.status(500).json({
+          success: false,
+          message: "Failed to send verification email",
+        });
+
+        console.log("Failed to send verification email:", err.message);
+      },
+    );
+    return res
       .status(200)
       .json({ success: true, message: "Reset code sent to your email!" });
-
-    sendpasswordResetTokenEmailTemplate(isUser.email, resetToken).catch((err) =>
-      console.log("Failed to send reset token email:", err.message),
-    );
   } catch (error) {
     console.log("Error while requesting password reset", error.message);
     return res
@@ -195,18 +250,18 @@ export const forgotMe = async (req, res) => {
 // resets the password
 export const resetPassword = async (req, res) => {
   try {
-    const { password, token } = req.body;
-    if (!password || !token) {
+    const { password, verificationToken } = req.body;
+    if (!password || !verificationToken) {
       return res.status(400).json({
         success: false,
         message: "Provide all the require feild!",
       });
     }
-    const userData = z.object({
-      password: z.string().min(6, "Password must me atleast 6 digit long"),
-    });
 
-    const result = userData.safeParse({ password: password });
+    const result = zodResetPass.safeParse({
+      password: password,
+      verificationToken: verificationToken,
+    });
 
     if (!result.success) {
       return res.status(400).json({
@@ -215,7 +270,7 @@ export const resetPassword = async (req, res) => {
       });
     }
     const isUser = await User.findOne({
-      passwordResetToken: token,
+      passwordResetToken: result.data.verificationToken,
       passwordResetTokenExpiresAt: { $gt: Date.now() },
     });
     if (!isUser) {
@@ -225,7 +280,7 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    if (parseInt(token) === parseInt(isUser.passwordResetToken)) {
+    if (result.data.verificationToken === isUser.passwordResetToken) {
       const hashedPassword = await bcrypt.hash(password, 10);
       ((isUser.password = hashedPassword),
         (isUser.passwordResetToken = undefined),
@@ -263,7 +318,15 @@ export const activateMe = async (req, res) => {
         .status(400)
         .json({ success: false, message: "Provide all the required feild!" });
     }
-    const isUser = await User.findOne({ email: email });
+
+    const result = zodEmail.safeParse({ email: email });
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error.issues.map((i) => i.message).join(", "),
+      });
+    }
+    const isUser = await User.findOne({ email: result.data.email });
     if (!isUser)
       return res.status(401).json({
         success: false,
@@ -282,13 +345,20 @@ export const activateMe = async (req, res) => {
         success: false,
         message: "Provide the valid email or password!",
       });
-    const verificationToken = crypto.randomInt(100000, 10000000);
+    const verificationToken = crypto.randomInt(1000000, 10000000);
     isUser.activationCode = verificationToken;
     isUser.activationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
 
     await isUser.save();
     await sendaccountactivateCodeemail(isUser.email, verificationToken).catch(
-      (err) => console.log("error sending activation code email", err.message),
+      (err) => {
+        res.status(500).json({
+          success: false,
+          message: "Failed to send verification Token email",
+        });
+
+        console.log("Failed to send verification Token email:", err.message);
+      },
     );
     return res
       .status(200)
@@ -310,7 +380,14 @@ export const deactivateMe = async (req, res) => {
         .status(400)
         .json({ success: false, message: "Provide all the required feild!" });
     }
-    const isUser = await User.findOne({ email: email });
+    const result = zodEmail.safeParse({ email: email });
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error.issues.map((i) => i.message).join(", "),
+      });
+    }
+    const isUser = await User.findOne({ email: result.data.email });
     if (!isUser)
       return res.status(401).json({
         success: false,
@@ -329,14 +406,20 @@ export const deactivateMe = async (req, res) => {
         success: false,
         message: "Provide the valid email or password!",
       });
-    const verificationToken = crypto.randomInt(100000, 10000000);
+    const verificationToken = crypto.randomInt(1000000, 10000000);
     isUser.deactivationCode = verificationToken;
     isUser.deactivationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
 
     await isUser.save();
     await sendaccountdeactivateCodeemail(isUser.email, verificationToken).catch(
-      (err) =>
-        console.log("error sending deactivation code email", err.message),
+      (err) => {
+        res.status(500).json({
+          success: false,
+          message: "Failed to send verification Token email",
+        });
+
+        console.log("Failed to send verification Token email:", err.message);
+      },
     );
     return res
       .status(200)
@@ -394,19 +477,24 @@ export const initilaze2FA = async (req, res) => {
         .json({ success: false, message: "2FA already enbaled!" });
     }
 
-    const twofaToken = crypto.randomInt(100000, 10000000);
+    const twofaToken = crypto.randomInt(1000000, 10000000);
     isUser.twofaToken = twofaToken;
-    isUser.twofaTokenExpiresAt = Date.now() + 15 * 60 * 1000; // 15 min
+    isUser.twofaTokenExpiresAt = Date.now() + 600 * 1000; // 10 min
 
     await isUser.save();
+    await sendtwoFactorCodeEmailTemplate(isUser.email, twofaToken).catch(
+      (err) => {
+        res.status(500).json({
+          success: false,
+          message: "Failed to send verification Token email",
+        });
 
+        console.log("Failed to send verification Token email:", err.message);
+      },
+    );
     res
       .status(200)
       .json({ success: true, message: "2FA code sent to your email!" });
-
-    await sendtwoFactorCodeEmailTemplate(twofaToken).catch((err) => {
-      console.log("Error while sending 2FA code!", err.message);
-    });
   } catch (error) {
     console.log("Error while sending 2FA code", error.message);
     return res.status(500).json({
@@ -421,16 +509,50 @@ export const initilaze2FA = async (req, res) => {
 // verify user's email
 export const verifyEmail = async (req, res) => {
   try {
-    const { verificationToken } = req.body;
-
+    const { verificationToken, type } = req.body;
     if (!verificationToken) {
       return res
         .status(400)
         .json({ success: false, message: "Provide all required feild!" });
     }
+    const result = zodVerification.safeParse({
+      verificationToken: verificationToken,
+    });
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error.issues.map((i) => i.message).join(", "),
+      });
+    }
+    // 2fa signin request handling
+
+    if (type && type === "2fa") {
+      const isUser = await User.findOne({
+        twofaToken: result.data.verificationToken,
+        twofaTokenExpiresAt: { $gt: Date.now() },
+      });
+      if (!isUser) {
+        return res.status(400).json({
+          success: false,
+          message: "Verification code is invalid or expired!",
+        });
+      }
+
+      if (result.data.verificationToken === isUser.twofaToken) {
+        isUser.twofaToken = undefined;
+        isUser.twofaTokenExpiresAt = undefined;
+        isUser.lastlogin = Date.now();
+        await isUser.save();
+        await generateCookies(res, isUser._id);
+        return res
+          .status(200)
+          .json({ success: true, message: "Login successfull!" });
+      }
+    }
 
     const isUser = await User.findOne({
-      verificationToken: verificationToken,
+      verificationToken: result.data.verificationToken,
       verificationTokenExpiresAt: { $gt: Date.now() },
     });
 
@@ -441,15 +563,16 @@ export const verifyEmail = async (req, res) => {
       });
     }
 
-    if (parseInt(verificationToken) === isUser.verificationToken) {
+    if (result.data.verificationToken === isUser.verificationToken) {
       isUser.isVerified = true;
       isUser.verificationToken = undefined;
       isUser.verificationTokenExpiresAt = undefined;
 
       await isUser.save();
+      await generateCookies(res, isUser._id);
       return res
         .status(200)
-        .json({ success: true, message: "Verification sucessfull!" });
+        .json({ success: true, message: "Account created sucessfully!" });
     }
 
     return res
@@ -459,7 +582,7 @@ export const verifyEmail = async (req, res) => {
     console.log("Error while verifying user", error.message);
     return res
       .status(500)
-      .json({ success: false, message: "Failed to verify!" });
+      .json({ success: false, message: "Failed to create you account!" });
   }
 };
 // de-activates the user
@@ -473,8 +596,19 @@ export const verifyDeactivation = async (req, res) => {
         .json({ success: false, message: "Provide all required feild!" });
     }
 
+    const result = zodVerification.safeParse({
+      verificationToken: verificationToken,
+    });
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error.issues.map((i) => i.message).join(", "),
+      });
+    }
+
     const isUser = await User.findOne({
-      deactivationCode: verificationToken,
+      deactivationCode: result.data.verificationToken,
       deactivationCodeExpiresAt: { $gt: Date.now() },
     });
 
@@ -485,7 +619,7 @@ export const verifyDeactivation = async (req, res) => {
       });
     }
 
-    if (parseInt(verificationToken) === isUser.deactivationCode) {
+    if (result.data.verificationToken === isUser.deactivationCode) {
       isUser.isActive = false;
       isUser.deactivationCode = undefined;
       isUser.deactivationCodeExpiresAt = undefined;
@@ -497,6 +631,7 @@ export const verifyDeactivation = async (req, res) => {
           err.message,
         );
       });
+      res.clearCookie("pass");
       return res
         .status(200)
         .json({ success: true, message: "Accout deactivatation sucessfull!" });
@@ -522,9 +657,18 @@ export const verifyActivation = async (req, res) => {
         .status(400)
         .json({ success: false, message: "Provide required feild!" });
     }
+    const result = zodVerification.safeParse({
+      verificationToken: verificationToken,
+    });
 
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error.issues.map((i) => i.message).join(", "),
+      });
+    }
     const isUser = await User.findOne({
-      activationCode: verificationToken,
+      activationCode: result.data.verificationToken,
       activationCodeExpiresAt: { $gt: Date.now() },
     });
 
@@ -535,7 +679,7 @@ export const verifyActivation = async (req, res) => {
       });
     }
 
-    if (parseInt(verificationToken) === isUser.activationCode) {
+    if (result.data.verificationToken === isUser.activationCode) {
       isUser.isActive = true;
       isUser.activationCode = undefined;
       isUser.activationCodeExpiresAt = undefined;
@@ -544,6 +688,7 @@ export const verifyActivation = async (req, res) => {
       await sendaccountactivatenotification(isUser.email).catch((err) => {
         console.log("error while sending activation email", err.message);
       });
+      await generateCookies(res, isUser._id);
       return res
         .status(200)
         .json({ success: true, message: "Accout activation sucessfull!" });
@@ -577,9 +722,18 @@ export const verify2FA = async (req, res) => {
         .status(400)
         .json({ success: false, message: "Type must be enable or disable!" });
     }
+    const result = zodVerification.safeParse({
+      verificationToken: verificationToken,
+    });
 
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error.issues.map((i) => i.message).join(", "),
+      });
+    }
     const isUser = await User.findOne({
-      twofaToken: verificationToken,
+      twofaToken: result.data.verificationToken,
       twofaTokenExpiresAt: { $gt: Date.now() },
     });
 
@@ -590,7 +744,7 @@ export const verify2FA = async (req, res) => {
       });
     }
 
-    if (parseInt(verificationToken) === isUser.twofaToken) {
+    if (result.data.verificationToken === isUser.twofaToken) {
       isUser.twofa = type === "enable" ? true : false;
       isUser.twofaToken = undefined;
       isUser.twofaTokenExpiresAt = undefined;
@@ -611,7 +765,7 @@ export const verify2FA = async (req, res) => {
         type === "enable" ? "Failed to enable 2FA" : "Failed to disable 2FA",
     });
   } catch (error) {
-    console.log("Error while enabling/disablign 2FA", error.message);
+    console.log("Error while enabling/disabling 2FA", error.message);
     return res
       .status(500)
       .json({ success: false, message: "Something went wrong!" });
@@ -619,95 +773,172 @@ export const verify2FA = async (req, res) => {
 };
 
 export const generateAgain = async (req, res) => {
-  const { email, type } = req.body;
-
-  const cookie = await req.cookies.pass;
-  if (!cookie) {
-    return res.json({
-      success: false,
-      messagae: "Please sign-in to use this feature!",
-    });
-  }
   try {
-    const token = await jwt.verify(cookie, process.env.JWT_SECRET);
-  } catch (error) {
-    console.log("error in jwt verification in generateAgain", error.messagae);
-    res.clearCookie("pass");
-    return res.json({
-      fatal: true,
-      messagae: "UnAuthorised Access. Sign-in again!",
-    });
-  }
+    const { type } = req.body;
+    let token;
+    const cookie = await req.cookies.pass;
+    if (!cookie) {
+      return res.json({
+        success: false,
+        messagae: "Please sign-in to use this feature!",
+      });
+    }
+    try {
+      token = await jwt.verify(cookie, process.env.JWT_SECRET);
+    } catch (error) {
+      console.log("error in jwt verification in generateAgain", error.messagae);
+      res.clearCookie("pass");
+      return res.json({
+        fatal: true,
+        messagae: "UnAuthorised Access. Sign-in again!",
+      });
+    }
 
-  if (!email || !type) {
-    return res.json({
+    if (!type) {
+      return res.json({
+        success: false,
+        messagae: "Provide type of request!",
+      });
+    }
+
+    const isUser = await User.findOne({ _id: token.userId });
+
+    if (!isUser) {
+      return res.json({ success: false, message: "Provide a valid email!" });
+    }
+
+    const newToken = crypto.randomInt(1000000, 10000000);
+
+    if (type === "email") {
+      if (!isUser.isVerified) {
+        isUser.verificationToken = newToken;
+        isUser.verificationTokenExpiresAt = Date.now() + 600 * 1000; // 10 minutes
+        await isUser.save();
+        sendsignupEmailTemplate(isUser.email, newToken).catch((err) => {
+          res.status(500).json({
+            success: false,
+            message: "Failed to send verification Token email",
+          });
+
+          console.log("Failed to send verification Token email:", err.message);
+        });
+        return res
+          .status(200)
+          .json({ success: true, message: "Resent successfull!" });
+      }
+
+      return res
+        .status(402)
+        .json({ success: false, message: "Already verified!" });
+    }
+    if (type === "reset") {
+      isUser.passwordResetToken = newToken;
+      isUser.passwordResetTokenExpiresAt = Date.now() + 600 * 1000; // 10 minutes;
+      await isUser.save();
+      await sendpasswordResetTokenEmailTemplate(isUser.email, newToken).catch(
+        (err) => {
+          res.status(500).json({
+            success: false,
+            message: "Failed to send verification Token email",
+          });
+
+          console.log("Failed to send verification Token email:", err.message);
+        },
+      );
+      return res
+        .status(200)
+        .json({ success: true, message: "Resent successfull!" });
+    }
+    if (type === "2fa") {
+      if (!isUser.twofa) {
+        isUser.twofaToken = newToken;
+        isUser.twofaTokenExpiresAt = Date.now() + 600 * 1000; // 10 minutes
+        await isUser.save();
+        await sendtwoFactorCodeEmailTemplate(isUser.email, newToken).catch(
+          (err) => {
+            res.status(500).json({
+              success: false,
+              message: "Failed to send verification Token email",
+            });
+
+            console.log(
+              "Failed to send verification Token email:",
+              err.message,
+            );
+          },
+        );
+        return res
+          .status(200)
+          .json({ success: true, message: "Resent successfull!" });
+      }
+      return res.status(402).json({
+        success: false,
+        message: "You can't change 2FA at this moment!",
+      });
+    }
+    if (type === "activation") {
+      if (isUser.isActive === false) {
+        isUser.activationCode = newToken;
+        isUser.activationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
+        await isUser.save();
+        await sendaccountactivateCodeemail(isUser.email, newToken).catch(
+          (err) => {
+            res.status(500).json({
+              success: false,
+              message: "Failed to send verification Token email",
+            });
+
+            console.log(
+              "Failed to send verification Token email:",
+              err.message,
+            );
+          },
+        );
+        return res
+          .status(200)
+          .json({ success: true, message: "Resent successfull!" });
+      }
+      return res
+        .status(402)
+        .json({ success: false, message: "Account is already active" });
+    }
+
+    if (type === "deactivation") {
+      if (isUser.isActive === true) {
+        isUser.deactivationCode = newToken;
+        isUser.deactivationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
+        await isUser.save();
+        await sendaccountdeactivateCodeemail(isUser.email, newToken).catch(
+          (err) => {
+            res.status(500).json({
+              success: false,
+              message: "Failed to send verification Token email",
+            });
+
+            console.log(
+              "Failed to send verification Token email:",
+              err.message,
+            );
+          },
+        );
+        return res
+          .status(200)
+          .json({ success: true, message: "Resent successfull!" });
+      }
+      return res
+        .status(402)
+        .json({ success: false, messagae: "Already deactivated!" });
+    }
+
+    return res.status(400).json({
       success: false,
-      messagae: "Provide email and type of request!",
+      message: "Provide use appopriate type of request!",
     });
-  }
-
-  const isUser = await User.findOne({ email: email });
-
-  if (!isUser) {
-    return res.json({ success: false, message: "Provide a valid email!" });
-  }
-
-  const newToken = crypto.randomInt(100000, 10000000);
-
-  if (type === "email") {
-    isUser.verificationToken = newToken;
-    isUser.verificationTokenExpiresAt = Date.now() + 600 * 1000; // 10 minutes
-    await isUser.save();
-    sendsignupEmailTemplate(isUser.email, newToken).catch((err) =>
-      console.log("Failed to send email verfication:", err.message),
-    );
-    return res
-      .status(200)
-      .json({ success: true, message: "Resent successfull!" });
-  }
-  if (type === "reset") {
-    isUser.passwordResetToken = newToken;
-    isUser.passwordResetTokenExpiresAt = Date.now() + 600 * 1000; // 10 minutes;
-    await isUser.save();
-    await sendpasswordResetTokenEmailTemplate(isUser.email, newToken).catch(
-      (err) => console.log("Failed to send reset token email:", err.message),
-    );
-    return res
-      .status(200)
-      .json({ success: true, message: "Resent successfull!" });
-  }
-  if (type === "2fa") {
-    isUser.twofaToken = newToken;
-    isUser.twofaTokenExpiresAt = Date.now() + 600 * 1000; // 10 minutes
-    await isUser.save();
-    await sendtwoFactorCodeEmailTemplate(isUser.email, newToken).catch((err) =>
-      console.log("Failed to send 2fa token email:", err.message),
-    );
-    return res
-      .status(200)
-      .json({ success: true, message: "Resent successfull!" });
-  }
-  if (type === "activation") {
-    isUser.activationCode = newToken;
-    isUser.activationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
-    await isUser.save();
-    await sendaccountactivateCodeemail(isUser.email, newToken).catch((err) =>
-      console.log("Failed to send activation token email:", err.message),
-    );
-    return res
-      .status(200)
-      .json({ success: true, message: "Resent successfull!" });
-  }
-
-  if (type === "deactivation") {
-    isUser.deactivationCode = newToken;
-    isUser.deactivationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
-    await isUser.save();
-    await sendaccountdeactivateCodeemail(isUser.email, newToken).catch((err) =>
-      console.log("Failed to send deactivation token email:", err.message),
-    );
-    return res
-      .status(200)
-      .json({ success: true, message: "Resent successfull!" });
+  } catch (error) {
+    console.log("Error in resend code", error.messagae);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong while sending verification code!",
+    });
   }
 };
