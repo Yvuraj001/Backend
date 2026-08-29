@@ -18,8 +18,14 @@ import {
 } from "../lib/email/email.js";
 import { verifyAuth } from "../lib/verifyAuthentication/verifyAuth.js";
 
+const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email("Please provide a valid email!");
+
 const zodEmail = z.object({
-  email: z.email("Please provide a valid email!"),
+  email: emailSchema,
 });
 
 const zodVerification = z.object({
@@ -47,7 +53,7 @@ export const signup = async (req, res) => {
     }
 
     const userData = z.object({
-      email: z.email("Please provide a valid email"),
+      email: emailSchema,
       password: z.string().min(6, "Password must me atleast 6 digit long"),
     });
 
@@ -82,7 +88,17 @@ export const signup = async (req, res) => {
       verificationTokenExpiresAt: Date.now() + 600 * 1000, // 10 minutes
     });
 
-    await newUser.save();
+    try {
+      await newUser.save();
+    } catch (error) {
+      if (error?.code === 11000) {
+        return res
+          .status(409)
+          .json({ success: false, message: "User already exists!" });
+      }
+
+      throw error;
+    }
 
     await sendsignupEmailTemplate(result.data.email, verificationToken).catch(
       (err) => {
