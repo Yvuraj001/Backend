@@ -1,28 +1,134 @@
-export const signupEmailTemplate = (code) => `
-<!doctype html><html lang="en"><body style="margin:0;padding:32px 16px;background:#09090b;color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;"><table role="presentation" width="100%"><tr><td align="center"><table role="presentation" width="100%" style="max-width:600px;background:#18181b;border:1px solid #3f3f46;border-radius:16px;"><tr><td style="padding:28px 36px;border-bottom:1px solid #3f3f46;font-size:20px;font-weight:700;color:#fff;">Backend Services</td></tr><tr><td style="padding:36px;"><p style="margin:0 0 12px;color:#a1a1aa;font-size:12px;font-weight:bold;letter-spacing:1.4px;">WELCOME</p><h1 style="margin:0 0 16px;color:#fff;font-size:28px;">Thanks for signing up.</h1><p style="margin:0;color:#d4d4d8;font-size:16px;line-height:1.6;">welcome to Backend Services . Please verify your email address to activate your account.</p><table role="presentation" style="margin-top:28px;"><tr><td bgcolor="#ffffff" style="border-radius:8px;">${code}</td></tr></table><p style="margin:28px 0 0;padding:14px 16px;background:#27272a;border-left:3px solid #71717a;color:#d4d4d8;font-size:14px;line-height:1.5;">If you did not create this account, you can safely ignore this email.</p></td></tr></table></td></tr></table></body></html>`;
+const appName = process.env.APP_NAME || "Backend Services";
+const companyName = process.env.COMPANY_NAME || appName;
+const supportEmail = process.env.SUPPORT_EMAIL || "support@example.com";
 
-export const passwordResetTokenEmailTemplate = (code) => `
-<!doctype html><html lang="en"><body style="margin:0;padding:32px 16px;background:#09090b;color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;"><table role="presentation" width="100%"><tr><td align="center"><table role="presentation" width="100%" style="max-width:600px;background:#18181b;border:1px solid #3f3f46;border-radius:16px;"><tr><td style="padding:28px 36px;border-bottom:1px solid #3f3f46;font-size:20px;font-weight:700;color:#fff;">Backend Services</td></tr><tr><td style="padding:36px;"><p style="margin:0 0 12px;color:#a1a1aa;font-size:12px;font-weight:bold;letter-spacing:1.4px;">PASSWORD RESET</p><h1 style="margin:0 0 16px;color:#fff;font-size:28px;">Reset your password.</h1><p style="margin:0;color:#d4d4d8;font-size:16px;line-height:1.6;">Use the code below to reset your password. It expires in 15 minutes.</p><div style="margin:28px 0;padding:18px;border:1px solid #52525b;border-radius:10px;background:#09090b;color:#fff;font-family:monospace;font-size:28px;font-weight:bold;letter-spacing:8px;text-align:center;">${code}</div><p style="margin:0;padding:14px 16px;background:#27272a;border-left:3px solid #71717a;color:#d4d4d8;font-size:14px;line-height:1.5;">If you did not request a password reset, please ignore this email.</p></td></tr></table></td></tr></table></body></html>`;
+const escapeHtml = (value) =>
+  String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 
-export const passwordResetNotificationEmailTemplate = () => `
-<!doctype html><html lang="en"><body style="margin:0;padding:32px 16px;background:#09090b;color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;"><table role="presentation" width="100%"><tr><td align="center"><table role="presentation" width="100%" style="max-width:600px;background:#18181b;border:1px solid #3f3f46;border-radius:16px;"><tr><td style="padding:28px 36px;border-bottom:1px solid #3f3f46;font-size:20px;font-weight:700;color:#fff;">Backend Services</td></tr><tr><td style="padding:36px;"><p style="margin:0 0 12px;color:#a1a1aa;font-size:12px;font-weight:bold;letter-spacing:1.4px;">SECURITY NOTICE</p><h1 style="margin:0 0 16px;color:#fff;font-size:28px;">Your password was changed.</h1><p style="margin:0;color:#d4d4d8;font-size:16px;line-height:1.6;">Hi John, this is a confirmation that the password for your account at Backend Services was changed successfully.</p><p style="margin:28px 0 0;padding:14px 16px;background:#27272a;border-left:3px solid #71717a;color:#d4d4d8;font-size:14px;line-height:1.5;">If you did not make this change, contact us immediately at superman@gmail.com.</p></td></tr></table></td></tr></table></body></html>`;
+const getPasswordResetUrl = (token) => {
+  const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  const resetUrl = new URL("/reset-password", baseUrl);
+  resetUrl.searchParams.set("token", token);
+  return resetUrl.toString();
+};
 
-export const twoFactorEnabledEmailTemplate = () => `
-<!doctype html><html lang="en"><body style="margin:0;padding:32px 16px;background:#09090b;color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;"><table role="presentation" width="100%"><tr><td align="center"><table role="presentation" width="100%" style="max-width:600px;background:#18181b;border:1px solid #3f3f46;border-radius:16px;"><tr><td style="padding:28px 36px;border-bottom:1px solid #3f3f46;font-size:20px;font-weight:700;color:#fff;">Backend Services</td></tr><tr><td style="padding:36px;"><p style="margin:0 0 12px;color:#a1a1aa;font-size:12px;font-weight:bold;letter-spacing:1.4px;">SECURITY UPDATE</p><h1 style="margin:0 0 16px;color:#fff;font-size:28px;">Two-factor authentication is on.</h1><p style="margin:0;color:#d4d4d8;font-size:16px;line-height:1.6;">Hi John, two-factor authentication has been enabled for your account at Backend Services. You will now need a verification code when signing in.</p><p style="margin:28px 0 0;padding:14px 16px;background:#27272a;border-left:3px solid #71717a;color:#d4d4d8;font-size:14px;line-height:1.5;">Did not enable this? Contact us immediately at superman@gmail.com.</p></td></tr></table></td></tr></table></body></html>`;
+const emailLayout = ({ eyebrow, title, body, code, action, notice }) => `
+<!doctype html>
+<html lang="en">
+  <body style="margin:0;padding:32px 16px;background:#f4f7fb;color:#1f2937;font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
+        <tr><td style="padding:24px 36px;background:#111827;color:#ffffff;font-size:20px;font-weight:700;">${escapeHtml(appName)}</td></tr>
+        <tr><td style="padding:36px;">
+          <p style="margin:0 0 10px;color:#4f46e5;font-size:12px;font-weight:700;letter-spacing:1.4px;">${escapeHtml(eyebrow)}</p>
+          <h1 style="margin:0 0 16px;color:#111827;font-size:28px;line-height:1.25;">${escapeHtml(title)}</h1>
+          <div style="color:#4b5563;font-size:16px;line-height:1.6;">${body}</div>
+          ${code ? `<div style="margin:28px 0;padding:18px;border:1px solid #c7d2fe;border-radius:10px;background:#eef2ff;color:#312e81;font-family:monospace;font-size:26px;font-weight:700;letter-spacing:6px;text-align:center;word-break:break-all;">${escapeHtml(code)}</div>` : ""}
+          ${action ? `<table role="presentation" cellspacing="0" cellpadding="0" style="margin:28px 0;"><tr><td style="border-radius:8px;background:#4f46e5;"><a href="${escapeHtml(action.url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 22px;color:#ffffff;font-size:16px;font-weight:700;text-decoration:none;">${escapeHtml(action.label)}</a></td></tr></table>` : ""}
+          ${notice ? `<p style="margin:28px 0 0;padding:14px 16px;border-left:3px solid #818cf8;background:#f9fafb;color:#4b5563;font-size:14px;line-height:1.5;">${notice}</p>` : ""}
+        </td></tr>
+        <tr><td style="padding:20px 36px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:12px;line-height:1.5;">&copy; ${new Date().getFullYear()} ${escapeHtml(companyName)}. Need help? Contact <a href="mailto:${escapeHtml(supportEmail)}" style="color:#4f46e5;">${escapeHtml(supportEmail)}</a>.</td></tr>
+      </table>
+    </td></tr></table>
+  </body>
+</html>`;
 
-export const twoFactorCodeEmailTemplate = (code) => `
-<!doctype html><html lang="en"><body style="margin:0;padding:32px 16px;background:#09090b;color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;"><table role="presentation" width="100%"><tr><td align="center"><table role="presentation" width="100%" style="max-width:600px;background:#18181b;border:1px solid #3f3f46;border-radius:16px;"><tr><td style="padding:28px 36px;border-bottom:1px solid #3f3f46;font-size:20px;font-weight:700;color:#fff;">Backend Services</td></tr><tr><td style="padding:36px;"><p style="margin:0 0 12px;color:#a1a1aa;font-size:12px;font-weight:bold;letter-spacing:1.4px;">SIGN-IN VERIFICATION</p><h1 style="margin:0 0 16px;color:#fff;font-size:28px;">Your verification code.</h1><p style="margin:0;color:#d4d4d8;font-size:16px;line-height:1.6;"> Enter this code to finish signing in. It expires in 10 minutes.</p><div style="margin:28px 0;padding:18px;border:1px solid #52525b;border-radius:10px;background:#09090b;color:#fff;font-family:monospace;font-size:28px;font-weight:bold;letter-spacing:8px;text-align:center;">${code}</div><p style="margin:0;padding:14px 16px;background:#27272a;border-left:3px solid #71717a;color:#d4d4d8;font-size:14px;line-height:1.5;">Never share this code with anyone.</p></td></tr></table></td></tr></table></body></html>`;
+export const signupEmailTemplate = (code) =>
+  emailLayout({
+    eyebrow: "WELCOME",
+    title: "Verify your email address",
+    body: `<p style="margin:0;">Welcome to ${escapeHtml(appName)}. Enter this code to activate your account. It expires in 10 minutes.</p>`,
+    code,
+    notice: "If you did not create this account, you can safely ignore this email.",
+  });
 
-export const emailVerificationTokenEmailTemplate = (code) => `
-<!doctype html><html lang="en"><body style="margin:0;padding:32px 16px;background:#09090b;color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;"><table role="presentation" width="100%"><tr><td align="center"><table role="presentation" width="100%" style="max-width:600px;background:#18181b;border:1px solid #3f3f46;border-radius:16px;"><tr><td style="padding:28px 36px;border-bottom:1px solid #3f3f46;font-size:20px;font-weight:700;color:#fff;">Backend Services</td></tr><tr><td style="padding:36px;"><p style="margin:0 0 12px;color:#a1a1aa;font-size:12px;font-weight:bold;letter-spacing:1.4px;">EMAIL VERIFICATION</p><h1 style="margin:0 0 16px;color:#fff;font-size:28px;">Verify your email address.</h1><p style="margin:0;color:#d4d4d8;font-size:16px;line-height:1.6;">Use this code to verify your email address. It expires in 1 hours.</p><div style="margin:28px 0;padding:18px;border:1px solid #52525b;border-radius:10px;background:#09090b;color:#fff;font-family:monospace;font-size:28px;font-weight:bold;letter-spacing:8px;text-align:center;">${code}</div><p style="margin:0;padding:14px 16px;background:#27272a;border-left:3px solid #71717a;color:#d4d4d8;font-size:14px;line-height:1.5;">If you did not request this verification, you can safely ignore this email.</p></td></tr></table></td></tr></table></body></html>`;
+export const passwordResetTokenEmailTemplate = (token) =>
+  emailLayout({
+    eyebrow: "PASSWORD RESET",
+    title: "Reset your password",
+    body: `<p style="margin:0;">We received a request to reset your ${escapeHtml(appName)} password. This link expires in 10 minutes.</p>`,
+    action: { url: getPasswordResetUrl(token), label: "Reset password" },
+    notice: `If you did not request a password reset, you can safely ignore this email or contact us at <a href="mailto:${escapeHtml(supportEmail)}" style="color:#4f46e5;">${escapeHtml(supportEmail)}</a>.`,
+  });
 
-export const accountDeactivatedEmailTemplate = () => `
-<!doctype html><html lang="en"><body style="margin:0;padding:32px 16px;background:#09090b;color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;"><table role="presentation" width="100%"><tr><td align="center"><table role="presentation" width="100%" style="max-width:600px;background:#18181b;border:1px solid #3f3f46;border-radius:16px;"><tr><td style="padding:28px 36px;border-bottom:1px solid #3f3f46;font-size:20px;font-weight:700;color:#fff;">Backend Services</td></tr><tr><td style="padding:36px;"><p style="margin:0 0 12px;color:#a1a1aa;font-size:12px;font-weight:bold;letter-spacing:1.4px;">ACCOUNT UPDATE</p><h1 style="margin:0 0 16px;color:#fff;font-size:28px;">Your account has been deactivated.</h1><p style="margin:0;color:#d4d4d8;font-size:16px;line-height:1.6;">Your Backend Services account is now deactivated. You will not be able to sign in until it is reactivated.</p><p style="margin:28px 0 0;padding:14px 16px;background:#27272a;border-left:3px solid #71717a;color:#d4d4d8;font-size:14px;line-height:1.5;">If you did not request this change, contact us immediately at superman@gmail.com.</p></td></tr></table></td></tr></table></body></html>`;
+export const passwordResetNotificationEmailTemplate = () =>
+  emailLayout({
+    eyebrow: "SECURITY NOTICE",
+    title: "Your password was changed",
+    body: `<p style="margin:0;">This confirms that the password for your ${escapeHtml(appName)} account was changed successfully.</p>`,
+    notice: `Did not make this change? Contact us immediately at <a href="mailto:${escapeHtml(supportEmail)}" style="color:#4f46e5;">${escapeHtml(supportEmail)}</a>.`,
+  });
 
-export const accountReactivatedEmailTemplate = () => `
-<!doctype html><html lang="en"><body style="margin:0;padding:32px 16px;background:#09090b;color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;"><table role="presentation" width="100%"><tr><td align="center"><table role="presentation" width="100%" style="max-width:600px;background:#18181b;border:1px solid #3f3f46;border-radius:16px;"><tr><td style="padding:28px 36px;border-bottom:1px solid #3f3f46;font-size:20px;font-weight:700;color:#fff;">Backend Services</td></tr><tr><td style="padding:36px;"><p style="margin:0 0 12px;color:#a1a1aa;font-size:12px;font-weight:bold;letter-spacing:1.4px;">ACCOUNT UPDATE</p><h1 style="margin:0 0 16px;color:#fff;font-size:28px;">Your account has been reactivated.</h1><p style="margin:0;color:#d4d4d8;font-size:16px;line-height:1.6;">Your Backend Services account is active again. You can now sign in and continue using Backend Services.</p><p style="margin:28px 0 0;padding:14px 16px;background:#27272a;border-left:3px solid #71717a;color:#d4d4d8;font-size:14px;line-height:1.5;">If you did not request this change, contact us immediately at superman@gmail.com.</p></td></tr></table></td></tr></table></body></html>`;
+export const twoFactorEnabledEmailTemplate = () =>
+  emailLayout({
+    eyebrow: "SECURITY UPDATE",
+    title: "Two-factor authentication is on",
+    body: `<p style="margin:0;">Two-factor authentication has been enabled for your ${escapeHtml(appName)} account. You will now need a verification code when signing in.</p>`,
+    notice: `Did not enable this? Contact us immediately at <a href="mailto:${escapeHtml(supportEmail)}" style="color:#4f46e5;">${escapeHtml(supportEmail)}</a>.`,
+  });
 
-export const accountDeactivatedEmailcodeTemplate = (code) => `
-<!doctype html><html lang="en"><body style="margin:0;padding:32px 16px;background:#09090b;color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;"><table role="presentation" width="100%"><tr><td align="center"><table role="presentation" width="100%" style="max-width:600px;background:#18181b;border:1px solid #3f3f46;border-radius:16px;"><tr><td style="padding:28px 36px;border-bottom:1px solid #3f3f46;font-size:20px;font-weight:700;color:#fff;">Backend Services</td></tr><tr><td style="padding:36px;"><p style="margin:0 0 12px;color:#a1a1aa;font-size:12px;font-weight:bold;letter-spacing:1.4px;">ACCOUNT UPDATE</p><h1 style="margin:0 0 16px;color:#fff;font-size:28px;">Use this code to deactivate your account!</h1><p style="margin:0;color:#d4d4d8;font-size:16px;line-height:1.6;">${code}</p><p style="margin:28px 0 0;padding:14px 16px;background:#27272a;border-left:3px solid #71717a;color:#d4d4d8;font-size:14px;line-height:1.5;">If you did not request this change, contact us immediately at superman@gmail.com.</p></td></tr></table></td></tr></table></body></html>`;
-export const accountActivateEmailcodeTemplate = (code) => `
-<!doctype html><html lang="en"><body style="margin:0;padding:32px 16px;background:#09090b;color:#f4f4f5;font-family:Arial,Helvetica,sans-serif;"><table role="presentation" width="100%"><tr><td align="center"><table role="presentation" width="100%" style="max-width:600px;background:#18181b;border:1px solid #3f3f46;border-radius:16px;"><tr><td style="padding:28px 36px;border-bottom:1px solid #3f3f46;font-size:20px;font-weight:700;color:#fff;">Backend Services</td></tr><tr><td style="padding:36px;"><p style="margin:0 0 12px;color:#a1a1aa;font-size:12px;font-weight:bold;letter-spacing:1.4px;">ACCOUNT UPDATE</p><h1 style="margin:0 0 16px;color:#fff;font-size:28px;">Use this code to Activate your account!</h1><p style="margin:0;color:#d4d4d8;font-size:16px;line-height:1.6;">${code}</p><p style="margin:28px 0 0;padding:14px 16px;background:#27272a;border-left:3px solid #71717a;color:#d4d4d8;font-size:14px;line-height:1.5;">If you did not request this change, contact us immediately at superman@gmail.com.</p></td></tr></table></td></tr></table></body></html>`;
+export const twoFactorCodeEmailTemplate = (code) =>
+  emailLayout({
+    eyebrow: "TWO-FACTOR AUTHENTICATION",
+    title: "Confirm your security change",
+    body: "<p style=\"margin:0;\">Enter this code to continue. It expires in 10 minutes.</p>",
+    code,
+    notice: "Never share this code with anyone.",
+  });
+
+export const twoFactorSignInEmailTemplate = (code) =>
+  emailLayout({
+    eyebrow: "SIGN-IN VERIFICATION",
+    title: "Confirm it’s you",
+    body: `<p style="margin:0;">Use this code to complete your sign-in to ${escapeHtml(appName)}. It expires in 10 minutes.</p>`,
+    code,
+    notice: "Never share this code with anyone. If you did not try to sign in, reset your password and contact support.",
+  });
+
+export const emailVerificationTokenEmailTemplate = (code) =>
+  emailLayout({
+    eyebrow: "EMAIL VERIFICATION",
+    title: "Verify your email address",
+    body: "<p style=\"margin:0;\">Use this code to verify your email address. It expires in 1 hour.</p>",
+    code,
+    notice: "If you did not request this verification, you can safely ignore this email.",
+  });
+
+export const accountDeactivatedEmailTemplate = () =>
+  emailLayout({
+    eyebrow: "ACCOUNT UPDATE",
+    title: "Your account has been deactivated",
+    body: `<p style="margin:0;">Your ${escapeHtml(appName)} account is now deactivated. You will not be able to sign in until it is reactivated.</p>`,
+    notice: `If you did not request this change, contact us immediately at <a href="mailto:${escapeHtml(supportEmail)}" style="color:#4f46e5;">${escapeHtml(supportEmail)}</a>.`,
+  });
+
+export const accountReactivatedEmailTemplate = () =>
+  emailLayout({
+    eyebrow: "ACCOUNT UPDATE",
+    title: "Your account is active again",
+    body: `<p style="margin:0;">Your ${escapeHtml(appName)} account has been reactivated. You can now sign in and continue using the service.</p>`,
+    notice: `If you did not request this change, contact us immediately at <a href="mailto:${escapeHtml(supportEmail)}" style="color:#4f46e5;">${escapeHtml(supportEmail)}</a>.`,
+  });
+
+export const accountDeactivatedEmailcodeTemplate = (code) =>
+  emailLayout({
+    eyebrow: "ACCOUNT UPDATE",
+    title: "Confirm account deactivation",
+    body: "<p style=\"margin:0;\">Enter this code to deactivate your account. It expires in 10 minutes.</p>",
+    code,
+    notice: "If you did not request this change, you can safely ignore this email.",
+  });
+
+export const accountActivateEmailcodeTemplate = (code) =>
+  emailLayout({
+    eyebrow: "ACCOUNT UPDATE",
+    title: "Confirm account reactivation",
+    body: "<p style=\"margin:0;\">Enter this code to reactivate your account. It expires in 10 minutes.</p>",
+    code,
+    notice: "If you did not request this change, you can safely ignore this email.",
+  });

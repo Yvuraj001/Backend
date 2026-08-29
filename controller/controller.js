@@ -9,6 +9,7 @@ import {
   sendpasswordResetNotificationEmailTemplate,
   sendpasswordResetTokenEmailTemplate,
   sendtwoFactorCodeEmailTemplate,
+  sendtwoFactorSignInEmailTemplate,
   sendtwoFactorEnabledEmailTemplate,
   sendaccountactivateCodeemail,
   sendaccountdeactivateCodeemail,
@@ -67,9 +68,9 @@ export const signup = async (req, res) => {
         .status(409)
         .json({ success: false, message: "User already exists!" });
     }
-    // pass and verfication tokens
+
     const hashedPassword = await bcrypt.hash(result.data.password, 10);
-    const verificationToken = crypto.randomInt(1000000, 10000000);
+    const verificationToken = crypto.randomInt(1000000, 100000000);
 
     // saving user
     const name = result.data.email.split("@")[0];
@@ -160,11 +161,12 @@ export const signin = async (req, res) => {
         .status(200)
         .json({ success: true, message: "login sucessfull!" });
     }
-    const signInToken = crypto.randomInt(1000000, 10000000);
-    isUser.twofaToken = signInToken;
-    isUser.twofaTokenExpiresAt = Date.now() + 600 * 1000; // 10 min
-    // await send2fasignincode(isUser.email, signInToken) create this email template
+
+    const signInToken = crypto.randomInt(1000000, 100000000);
+    isUser.twofaSignInToken = signInToken;
+    isUser.twofaSignInTokenExpiresAt = Date.now() + 600 * 1000; // 10 min
     await isUser.save();
+    await sendtwoFactorSignInEmailTemplate(isUser.email, signInToken);
     return res.status(200).json({ success: true, message: "Verify yourself!" });
   } catch (error) {
     console.log("Error while logining user: ", error.message);
@@ -194,8 +196,8 @@ export const logout = async (req, res) => {
 
 // ************************************************************************************
 
-// initialise forget password (sets reset code and send email to user)
-export const forgotMe = async (req, res) => {
+// initialise forget password
+export const initalize_forget_user = async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) {
@@ -222,24 +224,28 @@ export const forgotMe = async (req, res) => {
         .json({ success: false, message: "Account is de-activated!" });
     }
 
-    const resetToken = crypto.randomInt(1000000, 10000000);
+    const resetToken = crypto.randomBytes(25).toString("hex");
     isUser.passwordResetToken = resetToken;
     isUser.passwordResetTokenExpiresAt = Date.now() + 600 * 1000; // 10 min
     await isUser.save();
 
+    let emailError;
     await sendpasswordResetTokenEmailTemplate(isUser.email, resetToken).catch(
       (err) => {
-        res.status(500).json({
-          success: false,
-          message: "Failed to send verification email",
-        });
-
-        console.log("Failed to send verification email:", err.message);
+        emailError = err;
+        console.log("Failed to send password reset email:", err.message);
       },
     );
-    return res
-      .status(200)
-      .json({ success: true, message: "Reset code sent to your email!" });
+    if (emailError) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send password reset email!",
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Password reset link sent to your email!",
+    });
   } catch (error) {
     console.log("Error while requesting password reset", error.message);
     return res
@@ -248,19 +254,19 @@ export const forgotMe = async (req, res) => {
   }
 };
 // resets the password
-export const resetPassword = async (req, res) => {
+export const verify_forget_user = async (req, res) => {
   try {
-    const { password, verificationToken } = req.body;
-    if (!password || !verificationToken) {
+    const { password } = req.body;
+    const { auth_token } = req.params;
+    if (!password || !auth_token) {
       return res.status(400).json({
         success: false,
         message: "Provide all the require feild!",
       });
     }
 
-    const result = zodResetPass.safeParse({
+    const result = zodPassword.safeParse({
       password: password,
-      verificationToken: verificationToken,
     });
 
     if (!result.success) {
@@ -270,7 +276,7 @@ export const resetPassword = async (req, res) => {
       });
     }
     const isUser = await User.findOne({
-      passwordResetToken: result.data.verificationToken,
+      passwordResetToken: auth_token,
       passwordResetTokenExpiresAt: { $gt: Date.now() },
     });
     if (!isUser) {
@@ -280,7 +286,7 @@ export const resetPassword = async (req, res) => {
       });
     }
 
-    if (result.data.verificationToken === isUser.passwordResetToken) {
+    if (auth_token === isUser.passwordResetToken) {
       const hashedPassword = await bcrypt.hash(password, 10);
       ((isUser.password = hashedPassword),
         (isUser.passwordResetToken = undefined),
@@ -309,7 +315,7 @@ export const resetPassword = async (req, res) => {
 // ************************************************************************************
 
 // initialize re-activation of user
-export const activateMe = async (req, res) => {
+export const initalize_re_activate_user = async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -345,7 +351,7 @@ export const activateMe = async (req, res) => {
         success: false,
         message: "Provide the valid email or password!",
       });
-    const verificationToken = crypto.randomInt(1000000, 10000000);
+    const verificationToken = crypto.randomInt(1000000, 100000000);
     isUser.activationCode = verificationToken;
     isUser.activationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
 
@@ -371,7 +377,7 @@ export const activateMe = async (req, res) => {
   }
 };
 // initialize de-activation of user
-export const deactivateMe = async (req, res) => {
+export const initalize_de_activate_user = async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -406,7 +412,7 @@ export const deactivateMe = async (req, res) => {
         success: false,
         message: "Provide the valid email or password!",
       });
-    const verificationToken = crypto.randomInt(1000000, 10000000);
+    const verificationToken = crypto.randomInt(1000000, 100000000);
     isUser.deactivationCode = verificationToken;
     isUser.deactivationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
 
@@ -434,8 +440,8 @@ export const deactivateMe = async (req, res) => {
 
 // ************************************************************************************
 
-//  2FA initilazation
-export const initilaze2FA = async (req, res) => {
+//  2FA enable initilazation
+export const initilaze_enable_2fa = async (req, res) => {
   try {
     const cookie = await req.cookies.pass;
     const tokenMatched = await jwt.verify(cookie, process.env.JWT_SECRET);
@@ -470,16 +476,65 @@ export const initilaze2FA = async (req, res) => {
         message: "Your Account has already enabled 2FA!",
       });
     }
+    const twofaToken = crypto.randomInt(1000000, 100000000);
+    isUser.twofaEnableToken = twofaToken;
+    isUser.twofaEnableTokenExpiresAt = Date.now() + 600 * 1000; // 10 min
 
-    if (isUser.twofa) {
-      return res
-        .status(409)
-        .json({ success: false, message: "2FA already enbaled!" });
+    await isUser.save();
+    await sendtwoFactorCodeEmailTemplate(isUser.email, twofaToken).catch(
+      (err) => {
+        res.status(500).json({
+          success: false,
+          message: "Failed to send verification Token email",
+        });
+
+        console.log("Failed to send verification Token email:", err.message);
+      },
+    );
+    res
+      .status(200)
+      .json({ success: true, message: "2FA code sent to your email!" });
+  } catch (error) {
+    console.log("Error while sending 2FA code", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to send 2FA code. Signin to use this feature!",
+    });
+  }
+};
+// 2FA disable initilazation
+export const initilaze_disable_2fa = async (req, res) => {
+  try {
+    const cookie = await req.cookies.pass;
+    const tokenMatched = await jwt.verify(cookie, process.env.JWT_SECRET);
+    if (!tokenMatched) {
+      return res.json({
+        success: false,
+        message: "Please signin to enable 2FA!",
+      });
     }
 
-    const twofaToken = crypto.randomInt(1000000, 10000000);
-    isUser.twofaToken = twofaToken;
-    isUser.twofaTokenExpiresAt = Date.now() + 600 * 1000; // 10 min
+    const isUser = await User.findOne({ _id: tokenMatched.userId });
+    if (!isUser) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Invalid email!" });
+    }
+    if (!isUser.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: "First verify your account to enable 2FA!",
+      });
+    }
+    if (!isUser.isActive) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Your Account is de-activated!" });
+    }
+
+    const twofaToken = crypto.randomInt(1000000, 100000000);
+    isUser.twofaDisableToken = twofaToken;
+    isUser.twofaDisableExpiresAt = Date.now() + 600 * 1000; // 10 min
 
     await isUser.save();
     await sendtwoFactorCodeEmailTemplate(isUser.email, twofaToken).catch(
@@ -507,9 +562,9 @@ export const initilaze2FA = async (req, res) => {
 // ************************************************************************************
 
 // verify user's email
-export const verifyEmail = async (req, res) => {
+export const verify_user_email = async (req, res) => {
   try {
-    const { verificationToken, type } = req.body;
+    const { verificationToken } = req.body;
     if (!verificationToken) {
       return res
         .status(400)
@@ -525,37 +580,18 @@ export const verifyEmail = async (req, res) => {
         message: result.error.issues.map((i) => i.message).join(", "),
       });
     }
-    // 2fa signin request handling
-
-    if (type && type === "2fa") {
-      const isUser = await User.findOne({
-        twofaToken: result.data.verificationToken,
-        twofaTokenExpiresAt: { $gt: Date.now() },
-      });
-      if (!isUser) {
-        return res.status(400).json({
-          success: false,
-          message: "Verification code is invalid or expired!",
-        });
-      }
-
-      if (result.data.verificationToken === isUser.twofaToken) {
-        isUser.twofaToken = undefined;
-        isUser.twofaTokenExpiresAt = undefined;
-        isUser.lastlogin = Date.now();
-        await isUser.save();
-        await generateCookies(res, isUser._id);
-        return res
-          .status(200)
-          .json({ success: true, message: "Login successfull!" });
-      }
-    }
 
     const isUser = await User.findOne({
       verificationToken: result.data.verificationToken,
       verificationTokenExpiresAt: { $gt: Date.now() },
     });
 
+    if (isUser.isVerified) {
+      return res.status(402).json({
+        success: false,
+        message: "Account already verified!",
+      });
+    }
     if (!isUser) {
       return res.status(400).json({
         success: false,
@@ -586,7 +622,7 @@ export const verifyEmail = async (req, res) => {
   }
 };
 // de-activates the user
-export const verifyDeactivation = async (req, res) => {
+export const verify_de_activate_user = async (req, res) => {
   try {
     const { verificationToken } = req.body;
 
@@ -647,8 +683,8 @@ export const verifyDeactivation = async (req, res) => {
       .json({ success: false, message: "Failed to Deactivate!" });
   }
 };
-// activates the user
-export const verifyActivation = async (req, res) => {
+// re-activates the user
+export const verify_re_activate_user = async (req, res) => {
   try {
     const { verificationToken } = req.body;
 
@@ -704,24 +740,18 @@ export const verifyActivation = async (req, res) => {
       .json({ success: false, message: "Failed to Activate!" });
   }
 };
-// verifies 2FA and Enables/Disables
-export const verify2FA = async (req, res) => {
+// verifies 2FA  Enables
+export const verify_2fa_enable = async (req, res) => {
   try {
-    // type: enable or disable
-    const { verificationToken, type } = req.body;
+    const { verificationToken } = req.body;
 
-    if (!verificationToken || !type) {
+    if (!verificationToken) {
       return res.status(400).json({
         success: false,
-        message: "Provide verification token and type!",
+        message: "Provide verification token!",
       });
     }
 
-    if (type !== "enable" && type !== "disable") {
-      return res
-        .status(400)
-        .json({ success: false, message: "Type must be enable or disable!" });
-    }
     const result = zodVerification.safeParse({
       verificationToken: verificationToken,
     });
@@ -733,8 +763,8 @@ export const verify2FA = async (req, res) => {
       });
     }
     const isUser = await User.findOne({
-      twofaToken: result.data.verificationToken,
-      twofaTokenExpiresAt: { $gt: Date.now() },
+      twofaEnableToken: result.data.verificationToken,
+      twofaEnableTokenExpiresAt: { $gt: Date.now() },
     });
 
     if (!isUser) {
@@ -743,202 +773,410 @@ export const verify2FA = async (req, res) => {
         message: "Invalid or expired code!",
       });
     }
-
-    if (result.data.verificationToken === isUser.twofaToken) {
-      isUser.twofa = type === "enable" ? true : false;
-      isUser.twofaToken = undefined;
-      isUser.twofaTokenExpiresAt = undefined;
+    if (isUser.twofa) {
+      return res.status(200).json({
+        success: true,
+        message: "2FA already enabled!",
+      });
+    }
+    if (result.data.verificationToken === isUser.twofaEnableToken) {
+      isUser.twofa = true;
+      isUser.twofaEnableToken = undefined;
+      isUser.twofaEnableTokenExpiresAt = undefined;
 
       await isUser.save();
       return res.status(200).json({
         success: true,
-        message:
-          type === "enable"
-            ? "2FA enabled sucessfully!"
-            : "2FA disabled sucessfully",
+        message: "2FA enabled sucessfully!",
       });
     }
 
     return res.status(400).json({
       success: false,
-      message:
-        type === "enable" ? "Failed to enable 2FA" : "Failed to disable 2FA",
+      message: "Failed to enable 2FA!",
     });
   } catch (error) {
-    console.log("Error while enabling/disabling 2FA", error.message);
+    console.log("Error while enabling 2FA", error.message);
+    return res
+      .status(500)
+      .json({ success: false, message: "Something went wrong!" });
+  }
+};
+// verifies 2FA disable
+export const verify_2fa_disable = async (req, res) => {
+  try {
+    const { verificationToken } = req.body;
+
+    if (!verificationToken) {
+      return res.status(400).json({
+        success: false,
+        message: "Provide verification token!",
+      });
+    }
+
+    const result = zodVerification.safeParse({
+      verificationToken: verificationToken,
+    });
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error.issues.map((i) => i.message).join(", "),
+      });
+    }
+    const isUser = await User.findOne({
+      twofaDisableToken: result.data.verificationToken,
+      twofaDisableExpiresAt: { $gt: Date.now() },
+    });
+
+    if (!isUser) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired code!",
+      });
+    }
+    if (isUser.twofa === false) {
+      return res.status(402).json({
+        success: false,
+        message: "2FA already disabled!",
+      });
+    }
+
+    if (result.data.verificationToken === isUser.twofaDisableToken) {
+      isUser.twofa = false;
+      isUser.twofaDisableToken = undefined;
+      isUser.twofaDisableExpiresAt = undefined;
+
+      await isUser.save();
+      return res.status(200).json({
+        success: true,
+        message: "2FA disabled sucessfully!",
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: "Failed to disable 2FA!",
+    });
+  } catch (error) {
+    console.log("Error while disabling 2FA", error.message);
+    return res
+      .status(500)
+      .json({ success: false, message: "Something went wrong!" });
+  }
+};
+// 2FA Signin verification
+export const verify_2fa_signin = async (req, res) => {
+  try {
+    const { verificationToken } = req.body;
+
+    if (!verificationToken) {
+      return res
+        .status(200)
+        .json({ success: false, message: "Provide verification token!" });
+    }
+
+    const result = zodVerification.safeParse({
+      verificationToken: verificationToken,
+    });
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error.issues.map((i) => i.message).join(", "),
+      });
+    }
+    const isUser = await User.findOne({
+      twofaSignInToken: result.data.verificationToken,
+      twofaSignInTokenExpiresAt: { $gt: Date.now() },
+    });
+    if (!isUser) {
+      return res.status(400).json({
+        success: false,
+        message: "Verification code is invalid or expired!",
+      });
+    }
+
+    if (result.data.verificationToken === isUser.twofaSignInToken) {
+      isUser.twofaSignInToken = undefined;
+      isUser.twofaSignInTokenExpiresAt = undefined;
+      isUser.lastlogin = Date.now();
+      await isUser.save();
+      await generateCookies(res, isUser._id);
+      return res
+        .status(200)
+        .json({ success: true, message: "Login successfull!" });
+    }
+
+    return res
+      .status(403)
+      .json({ success: false, message: "Failed to verify your SignIn!" });
+  } catch (error) {
+    console.log("Error in 2Fa signin verification:", error.message);
     return res
       .status(500)
       .json({ success: false, message: "Something went wrong!" });
   }
 };
 
-export const generateAgain = async (req, res) => {
+// re-generates verificatoin codes
+export const generate_email_verification_code = async (req, res) => {
   try {
-    const { type } = req.body;
-    let token;
-    const cookie = await req.cookies.pass;
-    if (!cookie) {
-      return res.json({
+    const { email } = req.body;
+    if (!email) {
+      return res.json({ success: false, message: "Provide a valid email!" });
+    }
+    const result = zodEmail.safeParse({ email: email });
+    if (!result.success) {
+      return res.status(400).json({
         success: false,
-        messagae: "Please sign-in to use this feature!",
+        message: result.error.issues.map((i) => i.message).join(", "),
       });
     }
-    try {
-      token = await jwt.verify(cookie, process.env.JWT_SECRET);
-    } catch (error) {
-      console.log("error in jwt verification in generateAgain", error.messagae);
-      res.clearCookie("pass");
-      return res.json({
-        fatal: true,
-        messagae: "UnAuthorised Access. Sign-in again!",
-      });
-    }
-
-    if (!type) {
-      return res.json({
-        success: false,
-        messagae: "Provide type of request!",
-      });
-    }
-
-    const isUser = await User.findOne({ _id: token.userId });
+    const isUser = await User.findOne({ email: email });
 
     if (!isUser) {
       return res.json({ success: false, message: "Provide a valid email!" });
     }
 
-    const newToken = crypto.randomInt(1000000, 10000000);
-
-    if (type === "email") {
-      if (!isUser.isVerified) {
-        isUser.verificationToken = newToken;
-        isUser.verificationTokenExpiresAt = Date.now() + 600 * 1000; // 10 minutes
-        await isUser.save();
-        sendsignupEmailTemplate(isUser.email, newToken).catch((err) => {
-          res.status(500).json({
-            success: false,
-            message: "Failed to send verification Token email",
-          });
-
-          console.log("Failed to send verification Token email:", err.message);
-        });
-        return res
-          .status(200)
-          .json({ success: true, message: "Resent successfull!" });
-      }
-
-      return res
-        .status(402)
-        .json({ success: false, message: "Already verified!" });
-    }
-    if (type === "reset") {
-      isUser.passwordResetToken = newToken;
-      isUser.passwordResetTokenExpiresAt = Date.now() + 600 * 1000; // 10 minutes;
+    const newToken = crypto.randomInt(1000000, 100000000);
+    if (!isUser.isVerified && isUser.isActive) {
+      isUser.verificationToken = newToken;
+      isUser.verificationTokenExpiresAt = Date.now() + 600 * 1000; // 10 minutes
       await isUser.save();
-      await sendpasswordResetTokenEmailTemplate(isUser.email, newToken).catch(
-        (err) => {
-          res.status(500).json({
-            success: false,
-            message: "Failed to send verification Token email",
-          });
-
-          console.log("Failed to send verification Token email:", err.message);
-        },
-      );
+      let emailError;
+      await sendsignupEmailTemplate(isUser.email, newToken).catch((err) => {
+        emailError = err;
+        console.log("Failed to send verification token email:", err.message);
+      });
+      if (emailError) {
+        return res.status(500).json({
+          success: false,
+          message: "Failed to send verification token email!",
+        });
+      }
       return res
         .status(200)
         .json({ success: true, message: "Resent successfull!" });
     }
-    if (type === "2fa") {
-      if (!isUser.twofa) {
-        isUser.twofaToken = newToken;
-        isUser.twofaTokenExpiresAt = Date.now() + 600 * 1000; // 10 minutes
-        await isUser.save();
-        await sendtwoFactorCodeEmailTemplate(isUser.email, newToken).catch(
-          (err) => {
-            res.status(500).json({
-              success: false,
-              message: "Failed to send verification Token email",
-            });
 
-            console.log(
-              "Failed to send verification Token email:",
-              err.message,
-            );
-          },
-        );
-        return res
-          .status(200)
-          .json({ success: true, message: "Resent successfull!" });
-      }
-      return res.status(402).json({
-        success: false,
-        message: "You can't change 2FA at this moment!",
-      });
-    }
-    if (type === "activation") {
-      if (isUser.isActive === false) {
-        isUser.activationCode = newToken;
-        isUser.activationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
-        await isUser.save();
-        await sendaccountactivateCodeemail(isUser.email, newToken).catch(
-          (err) => {
-            res.status(500).json({
-              success: false,
-              message: "Failed to send verification Token email",
-            });
-
-            console.log(
-              "Failed to send verification Token email:",
-              err.message,
-            );
-          },
-        );
-        return res
-          .status(200)
-          .json({ success: true, message: "Resent successfull!" });
-      }
-      return res
-        .status(402)
-        .json({ success: false, message: "Account is already active" });
-    }
-
-    if (type === "deactivation") {
-      if (isUser.isActive === true) {
-        isUser.deactivationCode = newToken;
-        isUser.deactivationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
-        await isUser.save();
-        await sendaccountdeactivateCodeemail(isUser.email, newToken).catch(
-          (err) => {
-            res.status(500).json({
-              success: false,
-              message: "Failed to send verification Token email",
-            });
-
-            console.log(
-              "Failed to send verification Token email:",
-              err.message,
-            );
-          },
-        );
-        return res
-          .status(200)
-          .json({ success: true, message: "Resent successfull!" });
-      }
-      return res
-        .status(402)
-        .json({ success: false, messagae: "Already deactivated!" });
-    }
-
-    return res.status(400).json({
-      success: false,
-      message: "Provide use appopriate type of request!",
-    });
+    return res
+      .status(402)
+      .json({ success: false, message: "Already verified!" });
   } catch (error) {
-    console.log("Error in resend code", error.messagae);
+    console.log("Error in resend email verification code", error.messagae);
     return res.status(500).json({
       success: false,
       message: "Something went wrong while sending verification code!",
+    });
+  }
+};
+
+export const generate_reset_verification_code = async (req, res) => {
+  return initalize_forget_user(req, res);
+};
+
+export const generate_activation_verification_code = async (req, res) => {
+  try {
+    const result = zodEmail.safeParse({ email: req.body.email });
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error.issues.map((issue) => issue.message).join(", "),
+      });
+    }
+
+    const isUser = await User.findOne({ email: result.data.email });
+    if (!isUser) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found!" });
+    }
+    if (isUser.isActive) {
+      return res.status(409).json({
+        success: false,
+        message: "Account is already active!",
+      });
+    }
+
+    const code = crypto.randomInt(1000000, 100000000);
+    isUser.activationCode = code;
+    isUser.activationCodeExpiresAt = Date.now() + 600 * 1000;
+    await isUser.save();
+    let emailError;
+    await sendaccountactivateCodeemail(isUser.email, code).catch((err) => {
+      emailError = err;
+      console.log("Failed to send activation code email:", err.message);
+    });
+    if (emailError) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send activation code email!",
+      });
+    }
+
+    return res.json({ success: true, message: "Activation code resent!" });
+  } catch (error) {
+    console.log("Error resending activation code:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to resend activation code!",
+    });
+  }
+};
+
+export const generate_deactivation_verification_code = async (req, res) => {
+  try {
+    const result = zodEmail.safeParse({ email: req.body.email });
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error.issues.map((issue) => issue.message).join(", "),
+      });
+    }
+
+    const isUser = await User.findOne({ email: result.data.email });
+    if (!isUser) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found!" });
+    }
+    if (!isUser.isActive) {
+      return res.status(409).json({
+        success: false,
+        message: "Account is already deactivated!",
+      });
+    }
+
+    const code = crypto.randomInt(1000000, 100000000);
+    isUser.deactivationCode = code;
+    isUser.deactivationCodeExpiresAt = Date.now() + 600 * 1000;
+    await isUser.save();
+
+    let emailError;
+    await sendaccountdeactivateCodeemail(isUser.email, code).catch((err) => {
+      emailError = err;
+      console.log("Failed to send deactivation code email:", err.message);
+    });
+    if (emailError) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send deactivation code email!",
+      });
+    }
+
+    return res.json({ success: true, message: "Deactivation code resent!" });
+  } catch (error) {
+    console.log("Error resending deactivation code:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to resend deactivation code!",
+    });
+  }
+};
+
+// v1 of generate_2fa_verification_code
+export const generate_2fa_verification_code = async (req, res) => {
+  try {
+    const { type, email } = req.body;
+    if (!["enable", "disable", "signin"].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        message: "2FA type must be enable, disable, or signin!",
+      });
+    }
+
+    if (type === "signin") {
+      const result = zodEmail.safeParse({ email });
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.error.issues.map((issue) => issue.message).join(", "),
+        });
+      }
+
+      const isUser = await User.findOne({
+        email: result.data.email,
+        twofa: true,
+        twofaSignInTokenExpiresAt: { $gt: Date.now() },
+      });
+      if (!isUser) {
+        return res.status(400).json({
+          success: false,
+          message: "No pending two-factor sign-in was found!",
+        });
+      }
+
+      const code = crypto.randomInt(1000000, 100000000);
+      isUser.twofaSignInToken = code;
+      isUser.twofaSignInTokenExpiresAt = Date.now() + 600 * 1000;
+      await isUser.save();
+      let emailError;
+      await sendtwoFactorSignInEmailTemplate(isUser.email, code).catch((err) => {
+        emailError = err;
+        console.log("Failed to send 2FA sign-in email:", err.message);
+      });
+      if (emailError) {
+        return res.status(500).json({
+          success: false,
+          message: "Failed to send 2FA sign-in code email!",
+        });
+      }
+      return res.json({ success: true, message: "Sign-in code resent!" });
+    }
+
+    const cookie = req.cookies.pass;
+    if (!cookie) {
+      return res.status(401).json({
+        success: false,
+        message: "Please sign in to resend a 2FA code!",
+      });
+    }
+
+    const { userId } = jwt.verify(cookie, process.env.JWT_SECRET);
+    const isUser = await User.findById(userId);
+    if (!isUser || !isUser.isVerified || !isUser.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account cannot change 2FA settings right now!",
+      });
+    }
+    if (
+      (type === "enable" && isUser.twofa) ||
+      (type === "disable" && !isUser.twofa)
+    ) {
+      return res.status(409).json({
+        success: false,
+        message: `2FA is already ${type === "enable" ? "enabled" : "disabled"}!`,
+      });
+    }
+
+    const code = crypto.randomInt(1000000, 100000000);
+    if (type === "enable") {
+      isUser.twofaEnableToken = code;
+      isUser.twofaEnableTokenExpiresAt = Date.now() + 600 * 1000;
+    } else {
+      isUser.twofaDisableToken = code;
+      isUser.twofaDisableExpiresAt = Date.now() + 600 * 1000;
+    }
+    await isUser.save();
+    let emailError;
+    await sendtwoFactorCodeEmailTemplate(isUser.email, code).catch((err) => {
+      emailError = err;
+      console.log("Failed to send 2FA code email:", err.message);
+    });
+    if (emailError) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send 2FA code email!",
+      });
+    }
+
+    return res.json({ success: true, message: "2FA code resent!" });
+  } catch (error) {
+    console.log("Error resending 2FA code:", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to resend 2FA code!",
     });
   }
 };

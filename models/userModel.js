@@ -26,7 +26,7 @@ const userSchema = Schema({
   },
   verificationToken: Number,
   verificationTokenExpiresAt: Date,
-  passwordResetToken: Number,
+  passwordResetToken: String,
   passwordResetTokenExpiresAt: Date,
   lastlogin: {
     type: Date,
@@ -40,12 +40,16 @@ const userSchema = Schema({
     type: Boolean,
     default: false,
   },
-  twofaToken: Number,
-  twofaTokenExpiresAt: Date,
+  twofaEnableToken: Number,
+  twofaEnableTokenExpiresAt: Date,
+  twofaDisableToken: Number,
+  twofaDisableExpiresAt: Date,
   deactivationCode: Number,
   deactivationCodeExpiresAt: Date,
   activationCode: Number,
   activationCodeExpiresAt: Date,
+  twofaSignInToken: Number,
+  twofaSignInTokenExpiresAt: Date,
 });
 
 export const User = model("User", userSchema);
