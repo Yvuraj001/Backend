@@ -1093,7 +1093,15 @@ export const generate_deactivation_verification_code = async (req, res) => {
 // v1 of generate_2fa_verification_code
 export const generate_2fa_verification_code = async (req, res) => {
   try {
-    const { type, email } = req.body;
+    const token = req.cookies.pass;
+    const matchToken = jwt.verify(token, process.env.JWT_SECRET);
+    if (!matchToken) {
+      return res.status(401).json({
+        success: false,
+        message: "Please sign in to resend a 2FA code!",
+      });
+    }
+    const { type } = req.body;
     if (!["enable", "disable", "signin"].includes(type)) {
       return res.status(400).json({
         success: false,
@@ -1102,19 +1110,11 @@ export const generate_2fa_verification_code = async (req, res) => {
     }
 
     if (type === "signin") {
-      const result = zodEmail.safeParse({ email });
-      if (!result.success) {
-        return res.status(400).json({
-          success: false,
-          message: result.error.issues.map((issue) => issue.message).join(", "),
-        });
-      }
-
       const isUser = await User.findOne({
-        email: result.data.email,
+        _id: matchToken.userId,
         twofa: true,
-        twofaSignInTokenExpiresAt: { $gt: Date.now() },
       });
+
       if (!isUser) {
         return res.status(400).json({
           success: false,
@@ -1127,10 +1127,12 @@ export const generate_2fa_verification_code = async (req, res) => {
       isUser.twofaSignInTokenExpiresAt = Date.now() + 600 * 1000;
       await isUser.save();
       let emailError;
-      await sendtwoFactorSignInEmailTemplate(isUser.email, code).catch((err) => {
-        emailError = err;
-        console.log("Failed to send 2FA sign-in email:", err.message);
-      });
+      await sendtwoFactorSignInEmailTemplate(isUser.email, code).catch(
+        (err) => {
+          emailError = err;
+          console.log("Failed to send 2FA sign-in email:", err.message);
+        },
+      );
       if (emailError) {
         return res.status(500).json({
           success: false,
@@ -1140,16 +1142,7 @@ export const generate_2fa_verification_code = async (req, res) => {
       return res.json({ success: true, message: "Sign-in code resent!" });
     }
 
-    const cookie = req.cookies.pass;
-    if (!cookie) {
-      return res.status(401).json({
-        success: false,
-        message: "Please sign in to resend a 2FA code!",
-      });
-    }
-
-    const { userId } = jwt.verify(cookie, process.env.JWT_SECRET);
-    const isUser = await User.findById(userId);
+    const isUser = await User.findById(matchToken.userId);
     if (!isUser || !isUser.isVerified || !isUser.isActive) {
       return res.status(403).json({
         success: false,
@@ -1192,7 +1185,7 @@ export const generate_2fa_verification_code = async (req, res) => {
     console.log("Error resending 2FA code:", error.message);
     return res.status(500).json({
       success: false,
-      message: "Failed to resend 2FA code!",
+      message: "Failed to resend 2FA code. Sing-in to use this feature!",
     });
   }
 };
