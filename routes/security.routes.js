@@ -19,7 +19,6 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-
 export const securityRoutes = express.Router();
 // initalize forget password of user
 securityRoutes.post("/forgot-user/start", limiter, initalize_forget_user);

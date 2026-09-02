@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { User } from "../models/userModel.js";
 import bcrypt from "bcrypt";
-import { generateCookies } from "../lib/generateCookies/index.js";
+import { generateCookies } from "../lib/generateCookies/cookies.js";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import {
@@ -16,8 +16,6 @@ import {
   sendaccountdeactivatenotification,
   sendaccountactivatenotification,
 } from "../lib/email/email.js";
-import { verifyAuth } from "../lib/verifyAuthentication/verifyAuth.js";
-
 const emailSchema = z
   .string()
   .trim()
@@ -76,7 +74,7 @@ export const signup = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(result.data.password, 10);
-    const verificationToken = crypto.randomInt(1000000, 100000000);
+    const verificationToken = crypto.randomInt(10000000, 100000000);
 
     // saving user
     const name = result.data.email.split("@")[0];
@@ -168,7 +166,7 @@ export const signin = async (req, res) => {
       });
     }
     if (!isUser.twofa) {
-      await generateCookies(res, isUser._id);
+      await generateCookies(res, isUser._id, req);
       const updateEntry = await User.findOneAndUpdate(
         { email: result.data.email },
         { $set: { lastlogin: Date.now() } },
@@ -178,7 +176,7 @@ export const signin = async (req, res) => {
         .json({ success: true, message: "login sucessfull!" });
     }
 
-    const signInToken = crypto.randomInt(1000000, 100000000);
+    const signInToken = crypto.randomInt(10000000, 100000000);
     isUser.twofaSignInToken = signInToken;
     isUser.twofaSignInTokenExpiresAt = Date.now() + 600 * 1000; // 10 min
     await isUser.save();
@@ -367,7 +365,7 @@ export const initalize_re_activate_user = async (req, res) => {
         success: false,
         message: "Provide the valid email or password!",
       });
-    const verificationToken = crypto.randomInt(1000000, 100000000);
+    const verificationToken = crypto.randomInt(10000000, 100000000);
     isUser.activationCode = verificationToken;
     isUser.activationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
 
@@ -428,7 +426,7 @@ export const initalize_de_activate_user = async (req, res) => {
         success: false,
         message: "Provide the valid email or password!",
       });
-    const verificationToken = crypto.randomInt(1000000, 100000000);
+    const verificationToken = crypto.randomInt(10000000, 100000000);
     isUser.deactivationCode = verificationToken;
     isUser.deactivationCodeExpiresAt = Date.now() + 600 * 1000; // 10 minutes
 
@@ -492,7 +490,7 @@ export const initilaze_enable_2fa = async (req, res) => {
         message: "Your Account has already enabled 2FA!",
       });
     }
-    const twofaToken = crypto.randomInt(1000000, 100000000);
+    const twofaToken = crypto.randomInt(10000000, 100000000);
     isUser.twofaEnableToken = twofaToken;
     isUser.twofaEnableTokenExpiresAt = Date.now() + 600 * 1000; // 10 min
 
@@ -548,7 +546,7 @@ export const initilaze_disable_2fa = async (req, res) => {
         .json({ success: false, message: "Your Account is de-activated!" });
     }
 
-    const twofaToken = crypto.randomInt(1000000, 100000000);
+    const twofaToken = crypto.randomInt(10000000, 100000000);
     isUser.twofaDisableToken = twofaToken;
     isUser.twofaDisableExpiresAt = Date.now() + 600 * 1000; // 10 min
 
@@ -601,17 +599,16 @@ export const verify_user_email = async (req, res) => {
       verificationToken: result.data.verificationToken,
       verificationTokenExpiresAt: { $gt: Date.now() },
     });
-
-    if (isUser.isVerified) {
-      return res.status(402).json({
-        success: false,
-        message: "Account already verified!",
-      });
-    }
     if (!isUser) {
       return res.status(400).json({
         success: false,
         message: "Verification code is invalid or expired!",
+      });
+    }
+    if (isUser.isVerified) {
+      return res.status(402).json({
+        success: false,
+        message: "Account already verified!",
       });
     }
 
@@ -621,7 +618,7 @@ export const verify_user_email = async (req, res) => {
       isUser.verificationTokenExpiresAt = undefined;
 
       await isUser.save();
-      await generateCookies(res, isUser._id);
+      await generateCookies(res, isUser._id, req);
       return res
         .status(200)
         .json({ success: true, message: "Account created sucessfully!" });
@@ -740,7 +737,7 @@ export const verify_re_activate_user = async (req, res) => {
       await sendaccountactivatenotification(isUser.email).catch((err) => {
         console.log("error while sending activation email", err.message);
       });
-      await generateCookies(res, isUser._id);
+      await generateCookies(res, isUser._id, req);
       return res
         .status(200)
         .json({ success: true, message: "Accout activation sucessfull!" });
@@ -917,7 +914,7 @@ export const verify_2fa_signin = async (req, res) => {
       isUser.twofaSignInTokenExpiresAt = undefined;
       isUser.lastlogin = Date.now();
       await isUser.save();
-      await generateCookies(res, isUser._id);
+      await generateCookies(res, isUser._id, req);
       return res
         .status(200)
         .json({ success: true, message: "Login successfull!" });
@@ -954,7 +951,7 @@ export const generate_email_verification_code = async (req, res) => {
       return res.json({ success: false, message: "Provide a valid email!" });
     }
 
-    const newToken = crypto.randomInt(1000000, 100000000);
+    const newToken = crypto.randomInt(10000000, 100000000);
     if (!isUser.isVerified && isUser.isActive) {
       isUser.verificationToken = newToken;
       isUser.verificationTokenExpiresAt = Date.now() + 600 * 1000; // 10 minutes
@@ -1014,7 +1011,7 @@ export const generate_activation_verification_code = async (req, res) => {
       });
     }
 
-    const code = crypto.randomInt(1000000, 100000000);
+    const code = crypto.randomInt(10000000, 100000000);
     isUser.activationCode = code;
     isUser.activationCodeExpiresAt = Date.now() + 600 * 1000;
     await isUser.save();
@@ -1063,7 +1060,7 @@ export const generate_deactivation_verification_code = async (req, res) => {
       });
     }
 
-    const code = crypto.randomInt(1000000, 100000000);
+    const code = crypto.randomInt(10000000, 100000000);
     isUser.deactivationCode = code;
     isUser.deactivationCodeExpiresAt = Date.now() + 600 * 1000;
     await isUser.save();
@@ -1105,7 +1102,7 @@ export const generate_2fa_verification_code = async (req, res) => {
     if (!["enable", "disable", "signin"].includes(type)) {
       return res.status(400).json({
         success: false,
-        message: "2FA type must be enable, disable, or signin!",
+        message: "2FA type must be provided!",
       });
     }
 
@@ -1122,7 +1119,7 @@ export const generate_2fa_verification_code = async (req, res) => {
         });
       }
 
-      const code = crypto.randomInt(1000000, 100000000);
+      const code = crypto.randomInt(10000000, 100000000);
       isUser.twofaSignInToken = code;
       isUser.twofaSignInTokenExpiresAt = Date.now() + 600 * 1000;
       await isUser.save();
@@ -1159,7 +1156,7 @@ export const generate_2fa_verification_code = async (req, res) => {
       });
     }
 
-    const code = crypto.randomInt(1000000, 100000000);
+    const code = crypto.randomInt(10000000, 100000000);
     if (type === "enable") {
       isUser.twofaEnableToken = code;
       isUser.twofaEnableTokenExpiresAt = Date.now() + 600 * 1000;

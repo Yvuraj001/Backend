@@ -13,5 +13,5 @@ const limiter = rateLimit({
 export const authRouter = express.Router();
 
 authRouter.post("/signup", limiter, signup);
-authRouter.post("/signin", limiter, verifyAuth, signin);
+authRouter.post("/signin",  verifyAuth, signin);
 authRouter.post("/logout", logout);

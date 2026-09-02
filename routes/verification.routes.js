@@ -8,18 +8,16 @@ import {
   verify_2fa_enable,
   verify_2fa_signin,
 } from "../controller/controller.js";
-import { verifyAuth } from "../lib/verifyAuthentication/verifyAuth.js";
 import jwt from "jsonwebtoken";
 import rateLimit from "express-rate-limit";
 export const VerificationRouter = express.Router();
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 10,
   standardHeaders: true,
   legacyHeaders: false,
 });
-// verifies crossponding routes after their initalisation from security.routes.js
 VerificationRouter.get("/verify", limiter, async (req, res) => {
   try {
     const cookie = await req.cookies.pass;
@@ -31,6 +29,7 @@ VerificationRouter.get("/verify", limiter, async (req, res) => {
         message: "You arelogged in!",
       });
     }
+
   } catch (error) {
     console.log("You arn't not logged in", error.message);
 
