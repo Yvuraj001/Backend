@@ -1,16 +1,18 @@
 import express from "express";
 import {
   initalize_de_activate_user,
-  initalize_re_activate_user,
   initalize_forget_user,
+  initalize_re_activate_user,
   initilaze_disable_2fa,
   initilaze_enable_2fa,
+} from "../controller/security.controller.js";
+import {
   generate_2fa_verification_code,
   generate_activation_verification_code,
   generate_deactivation_verification_code,
   generate_email_verification_code,
   generate_reset_verification_code,
-} from "../controller/controller.js";
+} from "../controller/regenerate.controller.js";
 import rateLimit from "express-rate-limit";
 
 const limiter = rateLimit({

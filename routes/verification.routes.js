@@ -1,15 +1,15 @@
 import express from "express";
 import {
-  verify_user_email,
-  verify_forget_user,
-  verify_de_activate_user,
-  verify_re_activate_user,
   verify_2fa_disable,
   verify_2fa_enable,
   verify_2fa_signin,
-} from "../controller/controller.js";
-import jwt from "jsonwebtoken";
+  verify_de_activate_user,
+  verify_re_activate_user,
+  verify_user_email,
+  verify_forget_user,
+} from "../controller/verfification.controller.js";
 import rateLimit from "express-rate-limit";
+import { get_auth } from "../utils/getAuth.js";
 export const VerificationRouter = express.Router();
 
 const limiter = rateLimit({
@@ -18,27 +18,7 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
-VerificationRouter.get("/verify", limiter, async (req, res) => {
-  try {
-    const cookie = await req.cookies.pass;
-    const tokenMatched = await jwt.verify(cookie, process.env.JWT_SECRET);
-    if (tokenMatched.userId) {
-      return res.json({
-        success: true,
-        userId: tokenMatched.userId,
-        message: "You arelogged in!",
-      });
-    }
-
-  } catch (error) {
-    console.log("You arn't not logged in", error.message);
-
-    return res.json({
-      success: false,
-      message: "Not logged in!",
-    });
-  }
-});
+VerificationRouter.get("/verify", limiter, get_auth);
 VerificationRouter.post("/email/verify", limiter, verify_user_email);
 VerificationRouter.post(
   "/forgot-user/verify/:auth_token",

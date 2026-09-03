@@ -1,5 +1,5 @@
 import express from "express";
-import { signup, signin, logout } from "../controller/controller.js";
+import { logout, signin, signup } from "../controller/auth.controller.js";
 import { verifyAuth } from "../lib/verifyAuthentication/verifyAuth.js";
 import rateLimit from "express-rate-limit";
 
@@ -12,6 +12,6 @@ const limiter = rateLimit({
 
 export const authRouter = express.Router();
 
-authRouter.post("/signup", limiter, signup);
-authRouter.post("/signin",  verifyAuth, signin);
-authRouter.post("/logout", logout);
+authRouter.post("/signup", limiter, verifyAuth, signup);
+authRouter.post("/signin", limiter, signin);
+authRouter.get("/logout", logout);
