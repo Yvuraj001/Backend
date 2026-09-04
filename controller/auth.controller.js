@@ -76,7 +76,7 @@ export const signup = async (req, res) => {
     let emailError;
     await sendsignupEmailTemplate(result.data.email, verificationToken).catch(
       (err) => {
-        emailerror = err;
+        emailError = err;
         console.log("Failed to send verification Token email:", err.message);
       },
     );
@@ -147,7 +147,7 @@ export const signin = async (req, res) => {
       await generateCookies(res, isUser._id);
       const updateEntry = await User.findOneAndUpdate(
         { email: result.data.email },
-        { $set: { lastlogin: Date.now() } },
+        { $set: { lastLogin: Date.now() } },
       );
       return res
         .status(200)

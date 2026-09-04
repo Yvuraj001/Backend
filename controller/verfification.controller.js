@@ -1,6 +1,9 @@
 import bcrypt from "bcrypt";
 import { User } from "../models/userModel.js";
-import { cookiesOptions, generateCookies } from "../lib/generateCookies/cookies.js";
+import {
+  cookiesOptions,
+  generateCookies,
+} from "../lib/generateCookies/cookies.js";
 import { zodVerification, zodPassword } from "../utils/zodConfig.js";
 import {
   sendpasswordResetNotificationEmailTemplate,
@@ -345,7 +348,7 @@ export const verify_2fa_signin = async (req, res) => {
     if (result.data.verificationToken === isUser.twofaSignInToken) {
       isUser.twofaSignInToken = undefined;
       isUser.twofaSignInTokenExpiresAt = undefined;
-      isUser.lastlogin = Date.now();
+      isUser.lastLogin = Date.now();
       await isUser.save();
       await generateCookies(res, isUser._id);
       return res

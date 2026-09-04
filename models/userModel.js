@@ -30,7 +30,7 @@ const userSchema = Schema({
   verificationTokenExpiresAt: Date,
   passwordResetToken: String,
   passwordResetTokenExpiresAt: Date,
-  lastlogin: {
+  lastLogin: {
     type: Date,
     default: Date.now,
   },
@@ -42,6 +42,10 @@ const userSchema = Schema({
     type: Boolean,
     default: false,
   },
+  userAvatar: {
+    type: String
+  },
+
   twofaEnableToken: Number,
   twofaEnableTokenExpiresAt: Date,
   twofaDisableToken: Number,
