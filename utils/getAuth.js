@@ -9,7 +9,7 @@ export const get_auth = async (req, res) => {
       return res.status(200).json({
         success: true,
         userId: tokenMatched.userId,
-        message: "You arelogged in!",
+        message: "You are logged in!",
       });
     }
 

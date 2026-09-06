@@ -12,13 +12,16 @@
   "type": "module",
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
+    "googleapis": "^178.0.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.9.1",
+    "multer": "^2.3.0",
     "resend": "^6.20.0",
     "zod": "^4.4.3"
   }
