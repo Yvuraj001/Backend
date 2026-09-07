@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import { User } from "../models/userModel.js";
 import {
   cookiesOptions,
+  isCrossSite,
   generateCookies,
 } from "../lib/generateCookies/cookies.js";
 import { zodVerification, zodPassword } from "../utils/zodConfig.js";
