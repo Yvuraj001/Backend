@@ -6,6 +6,7 @@ import { User } from "../models/userModel.js";
 import { Session } from "../models/sessionModel.js";
 import {
   cookiesOptions,
+  isCrossSite,
   generateCookies,
 } from "../lib/generateCookies/cookies.js";
 import { zodEmail } from "../utils/zodConfig.js";
@@ -199,9 +200,10 @@ export const logout = async (req, res) => {
       });
 
       if (session) {
-        session.isValid = false;
-        session.refreshToken = undefined;
-        await session.save();
+        await Session.findOneAndUpdate(
+          { userId: match.userId },
+          { isValid: false },
+        );
       }
     }
   } catch (error) {
@@ -223,5 +225,46 @@ export const logout = async (req, res) => {
     res
       .status(500)
       .json({ success: false, message: "Failed to logout, try again later.." });
+  }
+};
+
+export const logout_all = async (req, res) => {
+  try {
+    const refreshCookie = req.cookies.pass;
+    const match = await jwt.verify(
+      refreshCookie,
+      process.env.JWT_REFRESH_SECRET,
+    );
+    if (match.userId) {
+      const session = await Session.find({ userId: match.userId });
+      if (!session)
+        return res
+          .status(404)
+          .json({ success: false, message: "Session not found!" });
+
+      // deactivating session
+      const updateSession = await Session.updateMany(
+        { userId: match.userId },
+        { isValid: false },
+      );
+      res.clearCookie("pass", cookiesOptions);
+      res.clearCookie("ref", cookiesOptions);
+
+      return res.status(200).json({
+        success: true,
+        message: "Successfully logged out from all devices!",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "failed logged out from all devices!",
+    });
+  } catch (error) {
+    console.log("Failed to logout from all devices!", error.message);
+    return res.status(500).json({
+      success: false,
+      message: "failed logged out from all devices!",
+    });
   }
 };
