@@ -15,8 +15,12 @@ const userSchema = Schema({
 
   password: {
     type: String,
-   
+    required: function () {
+      return this.provider === "local";
+    },
   },
+  googleId: String,
+  provider: { type: String, enum: ["local", "google"], default: "local" },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -43,7 +47,7 @@ const userSchema = Schema({
     default: false,
   },
   userAvatar: {
-    type: String
+    type: String,
   },
 
   twofaEnableToken: Number,

@@ -5,9 +5,10 @@ import "dotenv/config";
 import { authRouter } from "./routes/auth.routes.js";
 import { securityRoutes } from "./routes/security.routes.js";
 import { VerificationRouter } from "./routes/verification.routes.js";
+import { oAuthRoutes } from "./routes/oAuth.routes.js";
 import rateLimit from "express-rate-limit";
 import cors from "cors";
-
+import session from "express-session"; 
 
 const app = express();
 const port = process.env.PORT;
@@ -35,6 +36,16 @@ app.use(
     methods: ["GET", "POST"],
   }),
 );
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: false,
+    },
+  }),
+);
 const limiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 25,
@@ -45,7 +56,7 @@ const limiter = rateLimit({
 app.use("/api/auth", authRouter);
 app.use("/api/auth/security", securityRoutes);
 app.use("/api/auth/verification", VerificationRouter);
-
+app.use("/api/auth/oAuth/google", oAuthRoutes)
 app.get("/health",limiter,  (req, res) => {
   res
     .status(200)
