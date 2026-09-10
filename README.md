@@ -41,7 +41,7 @@ Email/password + Google OAuth · JWT sessions · 2FA · Account activation/deact
 ├── models/           # User, Session (Mongoose schemas)
 ├── routes/           # auth, security, verification, oAuth routers
 ├── utils/            # Zod schemas, Google/Cloudinary config, getAuth
-└── index.js          # App entry point
+└── index.js           # App entry point
 ```
 
 ## ⚙️ Setup
@@ -118,6 +118,19 @@ Log in. Sets `ref`/`pass` cookies, or emails a 2FA code if enabled on the accoun
 // 200
 { "success": true, "message": "string" }
 
+```
+
+### `POST /api/auth/refresh`
+
+Refreshes the access token using the current refresh token.
+
+The route validates the `pass` refresh-token cookie, generates a new short-lived access token, and sets the new access token in the `ref` cookie.
+
+*(refresh token required)*
+
+```json
+// 200
+{ "success": true, "message": "string" }
 ```
 
 ### `GET /api/auth/logout`
@@ -264,6 +277,7 @@ Resets the password.
 
 // 200
 { "success": true, "message": "string" }
+
 ```
 
 ### `POST /api/auth/verification/deactivate-user/verify`
