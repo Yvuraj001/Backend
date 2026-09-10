@@ -34,6 +34,7 @@ export const verify_user_email = async (req, res) => {
 
     const isUser = await User.findOne({
       verificationToken: result.data.verificationToken,
+      provider: "local",
       verificationTokenExpiresAt: { $gt: Date.now() },
     });
     if (!isUser) {
@@ -391,6 +392,7 @@ export const verify_forget_user = async (req, res) => {
     }
     const isUser = await User.findOne({
       passwordResetToken: auth_token,
+      provider: "local",
       passwordResetTokenExpiresAt: { $gt: Date.now() },
     });
     if (!isUser) {

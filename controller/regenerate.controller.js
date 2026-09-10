@@ -24,7 +24,7 @@ export const generate_email_verification_code = async (req, res) => {
         message: result.error.issues.map((i) => i.message).join(", "),
       });
     }
-    const isUser = await User.findOne({ email: email });
+    const isUser = await User.findOne({ email: email, provider: "local" });
 
     if (!isUser) {
       return res.json({ success: false, message: "Provide a valid email!" });
@@ -77,7 +77,10 @@ export const generate_activation_verification_code = async (req, res) => {
       });
     }
 
-    const isUser = await User.findOne({ email: result.data.email });
+    const isUser = await User.findOne({
+      email: result.data.email,
+
+    });
     if (!isUser) {
       return res
         .status(404)
@@ -126,7 +129,10 @@ export const generate_deactivation_verification_code = async (req, res) => {
       });
     }
 
-    const isUser = await User.findOne({ email: result.data.email });
+    const isUser = await User.findOne({
+      email: result.data.email,
+
+    });
     if (!isUser) {
       return res
         .status(404)
@@ -187,6 +193,7 @@ export const generate_2fa_verification_code = async (req, res) => {
     if (type === "signin") {
       const isUser = await User.findOne({
         _id: matchToken.userId,
+        provider: "local",
         twofa: true,
       });
 

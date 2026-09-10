@@ -26,7 +26,10 @@ export const initalize_forget_user = async (req, res) => {
         message: result.error.issues.map((i) => i.message).join(", "),
       });
     }
-    const isUser = await User.findOne({ email: result.data.email });
+    const isUser = await User.findOne({
+      email: result.data.email,
+      provider: "local",
+    });
     if (!isUser) {
       return res.status(200).json({
         success: true,
@@ -88,7 +91,9 @@ export const initalize_re_activate_user = async (req, res) => {
         message: result.error.issues.map((i) => i.message).join(", "),
       });
     }
-    const isUser = await User.findOne({ email: result.data.email });
+    const isUser = await User.findOne({
+      email: result.data.email,
+    });
     if (!isUser)
       return res.status(401).json({
         success: false,
@@ -153,7 +158,10 @@ export const initalize_de_activate_user = async (req, res) => {
         message: result.error.issues.map((i) => i.message).join(", "),
       });
     }
-    const isUser = await User.findOne({ email: result.data.email });
+    const isUser = await User.findOne({
+      email: result.data.email,
+    
+    });
     if (!isUser)
       return res.status(401).json({
         success: false,
@@ -288,7 +296,7 @@ export const initilaze_disable_2fa = async (req, res) => {
       });
     }
 
-    const isUser = await User.findOne({ _id: tokenMatched.userId });
+    const isUser = await User.findOne({ _id: tokenMatched.userId});
     if (!isUser) {
       return res.status(200).json({
         success: true,

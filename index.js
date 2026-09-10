@@ -14,7 +14,7 @@ const app = express();
 const port = process.env.PORT;
 
 
-const allowedOrigins = (process.env.CORS_ORIGINS )
+const allowedOrigins = (process.env.CORS_ORIGINS || '')
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
@@ -42,7 +42,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: false,
+      secure: process.env.NODE_ENV === "production",
     },
   }),
 );

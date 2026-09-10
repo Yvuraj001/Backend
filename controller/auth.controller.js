@@ -116,7 +116,10 @@ export const signin = async (req, res) => {
         message: result.error.issues.map((i) => i.message).join(", "),
       });
     }
-    const isUser = await User.findOne({ email: result.data.email });
+    const isUser = await User.findOne({
+      email: result.data.email,
+      provider: "local",
+    });
 
     if (!isUser) {
       return res.status(401).json({
@@ -193,18 +196,10 @@ export const logout = async (req, res) => {
       process.env.JWT_REFRESH_SECRET,
     );
     if (match.userId) {
-      const session = await Session.findOne({
-        userId: match.userId,
-        refreshToken: refreshCookie,
-        isValid: true,
-      });
-
-      if (session) {
-        await Session.findOneAndUpdate(
-          { userId: match.userId },
-          { isValid: false },
-        );
-      }
+      await Session.findOneAndUpdate(
+        { userId: match.userId, refreshToken: refreshCookie, isValid: true },
+        { isValid: false },
+      );
     }
   } catch (error) {
     console.log("Falied to update session validdation:", error.message);
